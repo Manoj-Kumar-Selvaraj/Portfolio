@@ -10,6 +10,7 @@ locals {
     key_vault_name      = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
     resource_group_name = "${local.prefix}-rg"
     vm_name             = var.vm_name
+    IDLE_MINUTES        = 5
   })
 
   common_tags = {
