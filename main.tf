@@ -80,10 +80,6 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# Read public SSH key
-data "local_file" "ssh_pub" {
-  filename = replace(var.ssh_public_key_path, "~", pathexpand("~"))
-}
 
 resource "azurerm_linux_virtual_machine" "jenkins" {
   name                = var.vm_name
@@ -95,7 +91,7 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 
   admin_ssh_key {
     username   = var.admin_username
-    public_key = data.local_file.ssh_pub.content
+    public_key = var.ssh_pub_key
   }
 
   os_disk {
