@@ -14,9 +14,8 @@ variable "admin_username" {
 }
 
 # Path to the public SSH key file (use the public key you generated)
-variable "ssh_public_key_path" {
+variable "ssh_pub_key" {
   type    = string
-  default = "~/.ssh/jenkins_ephemeral.pub"
 }
 
 variable "vm_size" {
