@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# cloud-init.sh - provision VM: docker, jenkins container, scripts, idle-shutdown service
 set -eux
 
-# Variables injected by Terraform
+# Terraform-injected values
+AZURE_KV_NAME="${key_vault_name}"
+VM_RG="${resource_group_name}"
+VM_NAME="${vm_name}"
+
 JENKINS_HOME_DIR=/var/jenkins_home
 JENKINS_PORT=8080
 JENKINS_CONTAINER_NAME=jenkins-controller
-AZURE_KV_NAME="${key_vault_name}"
 KV_SECRET_NAME="jenkins-apitoken"
-VM_RG="${resource_group_name}"
-VM_NAME="${vm_name}"
 IDLE_MINUTES=5
 
-# install packages
+# Install packages
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   apt-transport-https \
@@ -22,7 +22,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   lsb-release \
   gnupg
 
-# install docker
+# Install Docker
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
   | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
@@ -33,64 +33,75 @@ https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io
 
-# create Jenkins home dir
-mkdir -p ${JENKINS_HOME_DIR}
-chown 1000:1000 ${JENKINS_HOME_DIR}
+# Jenkins home
+mkdir -p $${JENKINS_HOME_DIR}
+chown 1000:1000 $${JENKINS_HOME_DIR}
 
-# pull jenkins image and run (expose 8080 and agent port 50000)
+# Run Jenkins container
 docker pull jenkins/jenkins:lts
-
-docker run -d --name ${JENKINS_CONTAINER_NAME} \
+docker run -d --name $${JENKINS_CONTAINER_NAME} \
   --restart unless-stopped \
-  -p ${JENKINS_PORT}:8080 -p 50000:50000 \
-  -v ${JENKINS_HOME_DIR}:/var/jenkins_home \
+  -p $${JENKINS_PORT}:8080 -p 50000:50000 \
+  -v $${JENKINS_HOME_DIR}:/var/jenkins_home \
   jenkins/jenkins:lts
 
-# install azure-cli
+# Install Azure CLI
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
-# place helper scripts
 mkdir -p /opt/jenkins
 
+###############################
 # fetch_jenkins_token.sh
-cat > /opt/jenkins/fetch_jenkins_token.sh <<EOF
+###############################
+cat > /opt/jenkins/fetch_jenkins_token.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
+
 VAULT_NAME="${key_vault_name}"
 SECRET_NAME="jenkins-apitoken"
 
 az login --identity >/dev/null 2>&1 || true
-az keyvault secret show --vault-name "\$VAULT_NAME" --name "\$SECRET_NAME" --query value -o tsv
+az keyvault secret show \
+  --vault-name "$VAULT_NAME" \
+  --name "$SECRET_NAME" \
+  --query value -o tsv
 EOF
 chmod +x /opt/jenkins/fetch_jenkins_token.sh
 
+###############################
 # trigger_job_local.sh
+###############################
 cat > /opt/jenkins/trigger_job_local.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
-JOB_NAME="${1:-deploy-site}"
+
+JOB_NAME="$${1:-deploy-site}"
 JENKINS_URL="http://localhost:8080"
 
-CRED=$(bash /opt/jenkins/fetch_jenkins_token.sh)
-JUSER=$(echo "$CRED" | cut -d: -f1)
-JTOKEN=$(echo "$CRED" | cut -d: -f2-)
+CRED=$$(/opt/jenkins/fetch_jenkins_token.sh)
+JUSER=$$(echo "$$CRED" | cut -d: -f1)
+JTOKEN=$$(echo "$$CRED" | cut -d: -f2-)
 
-CRUMB_JSON=$(curl -s -u "$JUSER:$JTOKEN" "$JENKINS_URL/crumbIssuer/api/json" || true)
-CRUMB=$(echo "$CRUMB_JSON" | jq -r .crumb)
-CRUMB_FIELD=$(echo "$CRUMB_JSON" | jq -r .crumbRequestField)
+CRUMB_JSON=$$(curl -s -u "$${JUSER}:$${JTOKEN}" "$${JENKINS_URL}/crumbIssuer/api/json" || true)
+CRUMB=$$(echo "$$CRUMB_JSON" | jq -r .crumb)
+CRUMB_FIELD=$$(echo "$$CRUMB_JSON" | jq -r .crumbRequestField)
 
-curl -X POST -u "$JUSER:$JTOKEN" \
-  -H "$CRUMB_FIELD: $CRUMB" \
-  "$JENKINS_URL/job/$JOB_NAME/build?delay=0"
+curl -X POST \
+  -u "$${JUSER}:$${JTOKEN}" \
+  -H "$${CRUMB_FIELD}: $${CRUMB}" \
+  "$${JENKINS_URL}/job/$${JOB_NAME}/build?delay=0"
 
-echo "Triggered $JOB_NAME"
+echo "Triggered $${JOB_NAME}"
 EOF
 chmod +x /opt/jenkins/trigger_job_local.sh
 
+###############################
 # idle-shutdown.sh
+###############################
 cat > /opt/jenkins/idle-shutdown.sh <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
+
 JENKINS_URL="http://localhost:8080"
 IDLE_MINUTES=${IDLE_MINUTES}
 AZURE_RG="${resource_group_name}"
@@ -112,9 +123,7 @@ while true; do
     last_ms=\$(get_last_completed_ms)
     now=\$(now_ms)
 
-    if [ "\$last_ms" -eq 0 ]; then
-      sleep 60
-    else
+    if [ "\$last_ms" -ne 0 ]; then
       idle_time=\$((now - last_ms))
       if [ "\$idle_time" -ge "\$IDLE_MS" ]; then
         az login --identity >/dev/null 2>&1 || true
@@ -127,13 +136,16 @@ while true; do
   sleep 30
 done
 EOF
+
 chmod +x /opt/jenkins/idle-shutdown.sh
 
+###############################
 # systemd service
+###############################
 cat > /etc/systemd/system/jenkins-idle-shutdown.service <<'EOF'
 [Unit]
 Description=Jenkins Idle Shutdown Service
-After=network-online.target docker.service
+After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
