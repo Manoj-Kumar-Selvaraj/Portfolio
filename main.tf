@@ -1,21 +1,42 @@
+############################################
+# Locals
+############################################
+
 locals {
   prefix = var.prefix
 
-  # Render cloud-init with real values
+  # Render cloud-init with substituted variables
   cloudinit_content = templatefile("${path.module}/cloud-init.sh", {
     key_vault_name      = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-    resource_group_name = azurerm_resource_group.rg.name
+    resource_group_name = "${local.prefix}-rg"
     vm_name             = var.vm_name
   })
+
+  common_tags = {
+    Owner   = "manoj"
+    Project = "jenkins-on-demand"
+  }
 }
 
+############################################
+# Client config
+############################################
+
 data "azurerm_client_config" "current" {}
+
+############################################
+# Resource Group
+############################################
 
 resource "azurerm_resource_group" "rg" {
   name     = "${local.prefix}-rg"
   location = var.location
   tags     = local.common_tags
 }
+
+############################################
+# Networking
+############################################
 
 resource "azurerm_virtual_network" "vnet" {
   name                = "${local.prefix}-vnet"
@@ -44,8 +65,8 @@ resource "azurerm_network_security_group" "nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_address_prefix      = "Internet"
-    source_port_range          = "*"
     destination_address_prefix = "*"
+    source_port_range          = "*"
     destination_port_range     = "22"
   }
 
@@ -56,8 +77,8 @@ resource "azurerm_network_security_group" "nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_address_prefix      = "Internet"
-    source_port_range          = "*"
     destination_address_prefix = "*"
+    source_port_range          = "*"
     destination_port_range     = "8080"
   }
 
@@ -93,9 +114,9 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
-# -------------------------------------------
-# KEY VAULT (must be created before VM)
-# -------------------------------------------
+############################################
+# KEY VAULT
+############################################
 
 resource "azurerm_key_vault" "kv" {
   name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
@@ -104,31 +125,43 @@ resource "azurerm_key_vault" "kv" {
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   sku_name                    = "standard"
 
-  # Allow VM identity (added after VM is created)
-  # For now, leave access policy empty; we add a dynamic block later
-
   tags = local.common_tags
 }
 
-# Placeholder secret (you overwrite later)
+############################################
+# Initial secret placeholder
+############################################
+
 resource "azurerm_key_vault_secret" "jenkins_token" {
   name         = "jenkins-apitoken"
   value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
   key_vault_id = azurerm_key_vault.kv.id
 }
 
-# -------------------------------------------
-# VM (with lifecycle auto-replace on cloud-init changes)
-# -------------------------------------------
+############################################
+# VM cloud-init trigger (Hash-based)
+############################################
+
+resource "null_resource" "cloudinit_hash" {
+  triggers = {
+    content_sha = sha256(local.cloudinit_content)
+  }
+}
+
+############################################
+# VM instance
+############################################
 
 resource "azurerm_linux_virtual_machine" "jenkins" {
   name                = var.vm_name
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   size                = var.vm_size
+  admin_username      = var.admin_username
 
-  admin_username       = var.admin_username
-  network_interface_ids = [azurerm_network_interface.nic.id]
+  network_interface_ids = [
+    azurerm_network_interface.nic.id
+  ]
 
   admin_ssh_key {
     username   = var.admin_username
@@ -151,20 +184,21 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
     type = "SystemAssigned"
   }
 
+  # cloud-init (base64 encoded)
   custom_data = base64encode(local.cloudinit_content)
-
-  tags = local.common_tags
 
   lifecycle {
     replace_triggered_by = [
-      sha256(local.cloudinit_content)
+      null_resource.cloudinit_hash
     ]
   }
+
+  tags = local.common_tags
 }
 
-# -------------------------------------------
-# Add VM managed identity to Key Vault AFTER VM exists
-# -------------------------------------------
+############################################
+# Grant VM managed identity access to Key Vault AFTER VM creation
+############################################
 
 resource "azurerm_key_vault_access_policy" "vm_kv_policy" {
   key_vault_id = azurerm_key_vault.kv.id
@@ -174,20 +208,14 @@ resource "azurerm_key_vault_access_policy" "vm_kv_policy" {
   secret_permissions = ["Get", "List"]
 }
 
+############################################
+# Admin user KV access policy
+############################################
+
 resource "azurerm_key_vault_access_policy" "admin_kv_policy" {
   key_vault_id = azurerm_key_vault.kv.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = data.azurerm_client_config.current.object_id
 
-  secret_permissions = ["Get","List","Set","Delete"]
-}
-
-# -------------------------------------------
-# Common tags
-# -------------------------------------------
-locals {
-  common_tags = {
-    Owner   = "manoj"
-    Project = "jenkins-on-demand"
-  }
+  secret_permissions = ["Get", "List", "Set", "Delete"]
 }
