@@ -1,18 +1,24 @@
 #!/usr/bin/env bash
 set -eux
 
-# Terraform-injected values
+############################################
+# Terraform-injected variables
+############################################
+
 AZURE_KV_NAME="${key_vault_name}"
 VM_RG="${resource_group_name}"
 VM_NAME="${vm_name}"
 
-JENKINS_HOME_DIR=/var/jenkins_home
+JENKINS_HOME_DIR="/var/jenkins_home"
 JENKINS_PORT=8080
-JENKINS_CONTAINER_NAME=jenkins-controller
+JENKINS_CONTAINER_NAME="jenkins-controller"
 KV_SECRET_NAME="jenkins-apitoken"
 IDLE_MINUTES=5
 
-# Install packages
+############################################
+# Base system setup
+############################################
+
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   apt-transport-https \
@@ -22,38 +28,49 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y \
   lsb-release \
   gnupg
 
+############################################
 # Install Docker
+############################################
+
 curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
   | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
 
 echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
-https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" \
+https://download.docker.com/linux/ubuntu $$(lsb_release -cs) stable" \
   > /etc/apt/sources.list.d/docker.list
 
 apt-get update -y
 apt-get install -y docker-ce docker-ce-cli containerd.io
 
-# Jenkins home
-mkdir -p $${JENKINS_HOME_DIR}
-chown 1000:1000 $${JENKINS_HOME_DIR}
+############################################
+# Jenkins container
+############################################
 
-# Run Jenkins container
+mkdir -p "$${JENKINS_HOME_DIR}"
+chown 1000:1000 "$${JENKINS_HOME_DIR}"
+
 docker pull jenkins/jenkins:lts
-docker run -d --name $${JENKINS_CONTAINER_NAME} \
+
+docker run -d --name "$${JENKINS_CONTAINER_NAME}" \
   --restart unless-stopped \
-  -p $${JENKINS_PORT}:8080 -p 50000:50000 \
-  -v $${JENKINS_HOME_DIR}:/var/jenkins_home \
+  -p "$${JENKINS_PORT}":8080 \
+  -p 50000:50000 \
+  -v "$${JENKINS_HOME_DIR}":/var/jenkins_home \
   jenkins/jenkins:lts
 
-# Install Azure CLI
+############################################
+# Install Azure CLI (for VM Managed Identity)
+############################################
+
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
 
 mkdir -p /opt/jenkins
 
-###############################
+############################################
 # fetch_jenkins_token.sh
-###############################
-cat > /opt/jenkins/fetch_jenkins_token.sh <<'EOF'
+############################################
+
+cat > /opt/jenkins/fetch_jenkins_token.sh <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -62,15 +79,17 @@ SECRET_NAME="jenkins-apitoken"
 
 az login --identity >/dev/null 2>&1 || true
 az keyvault secret show \
-  --vault-name "$VAULT_NAME" \
-  --name "$SECRET_NAME" \
+  --vault-name "\$VAULT_NAME" \
+  --name "\$SECRET_NAME" \
   --query value -o tsv
 EOF
+
 chmod +x /opt/jenkins/fetch_jenkins_token.sh
 
-###############################
+############################################
 # trigger_job_local.sh
-###############################
+############################################
+
 cat > /opt/jenkins/trigger_job_local.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -91,13 +110,15 @@ curl -X POST \
   -H "$${CRUMB_FIELD}: $${CRUMB}" \
   "$${JENKINS_URL}/job/$${JOB_NAME}/build?delay=0"
 
-echo "Triggered $${JOB_NAME}"
+echo "Triggered job: $${JOB_NAME}"
 EOF
+
 chmod +x /opt/jenkins/trigger_job_local.sh
 
-###############################
+############################################
 # idle-shutdown.sh
-###############################
+############################################
+
 cat > /opt/jenkins/idle-shutdown.sh <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -106,6 +127,7 @@ JENKINS_URL="http://localhost:8080"
 IDLE_MINUTES=${IDLE_MINUTES}
 AZURE_RG="${resource_group_name}"
 AZURE_VM_NAME="${vm_name}"
+
 IDLE_MS=\$((IDLE_MINUTES * 60 * 1000))
 
 now_ms() { date +%s%3N; }
@@ -116,16 +138,16 @@ get_last_completed_ms() {
 }
 
 while true; do
-  busy=\$(curl -s "\$JENKINS_URL/api/json" | jq -r .busyExecutors // 0)
-  queue_len=\$(curl -s "\$JENKINS_URL/queue/api/json" | jq -r '.items | length' // 0)
+  busy=$$(curl -s "\$JENKINS_URL/api/json" | jq -r .busyExecutors // 0)
+  queue_len=$$(curl -s "\$JENKINS_URL/queue/api/json" | jq -r '.items | length' // 0)
 
   if [ "\$busy" -eq 0 ] && [ "\$queue_len" -eq 0 ]; then
-    last_ms=\$(get_last_completed_ms)
-    now=\$(now_ms)
+    last_ms=$$(get_last_completed_ms)
+    now=$$(now_ms)
 
     if [ "\$last_ms" -ne 0 ]; then
-      idle_time=\$((now - last_ms))
-      if [ "\$idle_time" -ge "\$IDLE_MS" ]; then
+      idle=$$((now - last_ms))
+      if [ "\$idle" -ge "\$IDLE_MS" ]; then
         az login --identity >/dev/null 2>&1 || true
         az vm deallocate -g "\$AZURE_RG" -n "\$AZURE_VM_NAME" --no-wait || true
         exit 0
@@ -139,9 +161,10 @@ EOF
 
 chmod +x /opt/jenkins/idle-shutdown.sh
 
-###############################
+############################################
 # systemd service
-###############################
+############################################
+
 cat > /etc/systemd/system/jenkins-idle-shutdown.service <<'EOF'
 [Unit]
 Description=Jenkins Idle Shutdown Service
