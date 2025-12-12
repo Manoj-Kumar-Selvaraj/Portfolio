@@ -129,8 +129,9 @@ resource "azurerm_key_vault" "kv" {
   resource_group_name         = azurerm_resource_group.rg.name
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   sku_name                    = "standard"
-  enable_purge_protection     = false
-  enable_soft_delete          = true
+  properties {
+    purge_protection_enabled = false   # or true based on your requirement
+  }
 
   # initial access policy: give the VM managed identity get/list
   access_policy {
