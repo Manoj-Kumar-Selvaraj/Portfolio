@@ -131,8 +131,8 @@ resource "azurerm_key_vault" "kv" {
     object_id = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
 
     secret_permissions = [
-      "get",
-      "list"
+      "Get",
+      "List"
     ]
   }
 
@@ -140,7 +140,7 @@ resource "azurerm_key_vault" "kv" {
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
-    secret_permissions = ["get","list","set","delete"]
+    secret_permissions = ["Get","List","Set","Delete"]
   }
 }
 
