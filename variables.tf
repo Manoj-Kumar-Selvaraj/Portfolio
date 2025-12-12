@@ -1,0 +1,35 @@
+variable "prefix" {
+  type    = string
+  default = "portfolio"
+}
+
+variable "location" {
+  type    = string
+  default = "eastus" # change to preferred region
+}
+
+variable "admin_username" {
+  type    = string
+  default = "azureuser"
+}
+
+# Path to the public SSH key file (use the public key you generated)
+variable "ssh_public_key_path" {
+  type    = string
+  default = "~/.ssh/jenkins_ephemeral.pub"
+}
+
+variable "vm_size" {
+  type    = string
+  default = "Standard_B2s" # recommended for Jenkins controller
+}
+
+variable "vm_name" {
+  type    = string
+  default = "jenkins-vm"
+}
+
+variable "key_vault_name" {
+  type    = string
+  default = "" # optional; otherwise terraform will set automatically
+}
