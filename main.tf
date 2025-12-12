@@ -7,6 +7,7 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "rg" {
   name     = "${local.prefix}-rg"
   location = var.location
+  tags     = local.common_tags 
 }
 
 resource "azurerm_virtual_network" "vnet" {
@@ -162,14 +163,5 @@ locals {
   common_tags = {
     Owner = "manoj"
     Project = "jenkins-on-demand"
-  }
-}
-
-resource "azurerm_resource_group" "rg_tags" {
-  # no-op: we already created rg but this block is kept for tags example
-  # Terraform has already created the resource; tags can be applied via resource definition above
-  # (left intentionally blank)
-  lifecycle {
-    ignore_changes = [tags]
   }
 }
