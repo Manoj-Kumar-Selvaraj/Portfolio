@@ -1,5 +1,12 @@
 locals {
   prefix = var.prefix
+
+  # Render cloud-init with real values
+  cloudinit_content = templatefile("${path.module}/cloud-init.sh", {
+    key_vault_name      = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
+    resource_group_name = azurerm_resource_group.rg.name
+    vm_name             = var.vm_name
+  })
 }
 
 data "azurerm_client_config" "current" {}
@@ -7,7 +14,7 @@ data "azurerm_client_config" "current" {}
 resource "azurerm_resource_group" "rg" {
   name     = "${local.prefix}-rg"
   location = var.location
-  tags     = local.common_tags 
+  tags     = local.common_tags
 }
 
 resource "azurerm_virtual_network" "vnet" {
@@ -15,6 +22,7 @@ resource "azurerm_virtual_network" "vnet" {
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   address_space       = ["10.0.0.0/16"]
+  tags                = local.common_tags
 }
 
 resource "azurerm_subnet" "subnet" {
@@ -52,6 +60,8 @@ resource "azurerm_network_security_group" "nsg" {
     destination_address_prefix = "*"
     destination_port_range     = "8080"
   }
+
+  tags = local.common_tags
 }
 
 resource "azurerm_public_ip" "pip" {
@@ -60,6 +70,7 @@ resource "azurerm_public_ip" "pip" {
   resource_group_name = azurerm_resource_group.rg.name
   allocation_method   = "Static"
   sku                 = "Standard"
+  tags                = local.common_tags
 }
 
 resource "azurerm_network_interface" "nic" {
@@ -73,6 +84,8 @@ resource "azurerm_network_interface" "nic" {
     private_ip_address_allocation = "Dynamic"
     public_ip_address_id          = azurerm_public_ip.pip.id
   }
+
+  tags = local.common_tags
 }
 
 resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
@@ -80,13 +93,41 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
   network_security_group_id = azurerm_network_security_group.nsg.id
 }
 
+# -------------------------------------------
+# KEY VAULT (must be created before VM)
+# -------------------------------------------
+
+resource "azurerm_key_vault" "kv" {
+  name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
+
+  # Allow VM identity (added after VM is created)
+  # For now, leave access policy empty; we add a dynamic block later
+
+  tags = local.common_tags
+}
+
+# Placeholder secret (you overwrite later)
+resource "azurerm_key_vault_secret" "jenkins_token" {
+  name         = "jenkins-apitoken"
+  value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
+  key_vault_id = azurerm_key_vault.kv.id
+}
+
+# -------------------------------------------
+# VM (with lifecycle auto-replace on cloud-init changes)
+# -------------------------------------------
 
 resource "azurerm_linux_virtual_machine" "jenkins" {
   name                = var.vm_name
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
   size                = var.vm_size
-  admin_username      = var.admin_username
+
+  admin_username       = var.admin_username
   network_interface_ids = [azurerm_network_interface.nic.id]
 
   admin_ssh_key {
@@ -110,51 +151,43 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
     type = "SystemAssigned"
   }
 
-  # pass cloud-init as custom_data (templatefile will render values)
-  custom_data = base64encode(templatefile("${path.module}/cloud-init.sh", {
-    key_vault_name       = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-    resource_group_name  = azurerm_resource_group.rg.name
-    vm_name              = var.vm_name
-  }))
-}
+  custom_data = base64encode(local.cloudinit_content)
 
-# Create Key Vault
-resource "azurerm_key_vault" "kv" {
-  name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-  location                    = azurerm_resource_group.rg.location
-  resource_group_name         = azurerm_resource_group.rg.name
-  tenant_id                   = data.azurerm_client_config.current.tenant_id
-  sku_name                    = "standard"
-  # initial access policy: give the VM managed identity get/list
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
+  tags = local.common_tags
 
-    secret_permissions = [
-      "Get",
-      "List"
+  lifecycle {
+    replace_triggered_by = [
+      sha256(local.cloudinit_content)
     ]
   }
-
-  # Also allow current principal so you can set secrets with az cli from your account
-  access_policy {
-    tenant_id = data.azurerm_client_config.current.tenant_id
-    object_id = data.azurerm_client_config.current.object_id
-    secret_permissions = ["Get","List","Set","Delete"]
-  }
 }
 
-# A placeholder secret (you will overwrite or update after creating Jenkins)
-resource "azurerm_key_vault_secret" "jenkins_token" {
-  name         = "jenkins-apitoken"
-  value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
+# -------------------------------------------
+# Add VM managed identity to Key Vault AFTER VM exists
+# -------------------------------------------
+
+resource "azurerm_key_vault_access_policy" "vm_kv_policy" {
   key_vault_id = azurerm_key_vault.kv.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
+
+  secret_permissions = ["Get", "List"]
 }
 
-# Optional: tag everything
+resource "azurerm_key_vault_access_policy" "admin_kv_policy" {
+  key_vault_id = azurerm_key_vault.kv.id
+  tenant_id    = data.azurerm_client_config.current.tenant_id
+  object_id    = data.azurerm_client_config.current.object_id
+
+  secret_permissions = ["Get","List","Set","Delete"]
+}
+
+# -------------------------------------------
+# Common tags
+# -------------------------------------------
 locals {
   common_tags = {
-    Owner = "manoj"
+    Owner   = "manoj"
     Project = "jenkins-on-demand"
   }
 }
