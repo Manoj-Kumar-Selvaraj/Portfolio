@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -eux
+set -e
 
 ############################################
 # Terraform-injected variables
@@ -21,26 +21,17 @@ KV_SECRET_NAME="jenkins-apitoken"
 
 apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
-  apt-transport-https \
   ca-certificates \
   curl \
-  jq \
-  lsb-release \
-  gnupg
+  jq
 
 ############################################
-# Install Docker
+# Install Docker (Ubuntu-native, cloud-init safe)
 ############################################
 
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
-  | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-echo "deb [signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] \
-https://download.docker.com/linux/ubuntu $$(lsb_release -cs) stable" \
-  > /etc/apt/sources.list.d/docker.list
-
-apt-get update -y
-apt-get install -y docker-ce docker-ce-cli containerd.io
+apt-get install -y docker.io
+systemctl enable docker
+systemctl start docker
 
 ############################################
 # Jenkins container
