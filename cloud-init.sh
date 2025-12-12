@@ -8,12 +8,12 @@ set -eux
 AZURE_KV_NAME="${key_vault_name}"
 VM_RG="${resource_group_name}"
 VM_NAME="${vm_name}"
+IDLE_MINUTES=${IDLE_MINUTES}
 
 JENKINS_HOME_DIR="/var/jenkins_home"
 JENKINS_PORT=8080
 JENKINS_CONTAINER_NAME="jenkins-controller"
 KV_SECRET_NAME="jenkins-apitoken"
-IDLE_MINUTES=5
 
 ############################################
 # Base system setup
@@ -59,7 +59,7 @@ docker run -d --name "$${JENKINS_CONTAINER_NAME}" \
   jenkins/jenkins:lts
 
 ############################################
-# Install Azure CLI (for VM Managed Identity)
+# Install Azure CLI (Managed Identity)
 ############################################
 
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
