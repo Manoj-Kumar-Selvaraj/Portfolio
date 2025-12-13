@@ -33,6 +33,6 @@ variable "key_vault_name" {
   default = "" # optional; otherwise terraform will set automatically
 }
 
-variables "vault_secret_name" {
+variable "vault_secret_name" {
   type    = string 
 }
