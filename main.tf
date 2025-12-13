@@ -134,7 +134,7 @@ resource "azurerm_key_vault" "kv" {
 ############################################
 
 resource "azurerm_key_vault_secret" "jenkins_token" {
-  name         = "jenkins-apitoken"
+  name         = var.vault_secret_name
   value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
   key_vault_id = azurerm_key_vault.kv.id
 }
