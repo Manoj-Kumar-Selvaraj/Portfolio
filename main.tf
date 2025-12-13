@@ -201,7 +201,7 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 # Grant VM managed identity access to Key Vault AFTER VM creation
 ############################################
 
-resource "azurerm_key_vault_access_policy" "vm_kv_policy" {
+resource "azurerm_key_vault_access_policy" "vm_kv_man_policy" {
   key_vault_id = azurerm_key_vault.kv.id
   tenant_id    = data.azurerm_client_config.current.tenant_id
   object_id    = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
