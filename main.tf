@@ -5,7 +5,6 @@
 locals {
   prefix = var.prefix
 
-  # Render cloud-init with substituted variables
   cloudinit_content = templatefile("${path.module}/cloud-init.sh", {
     key_vault_name      = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
     resource_group_name = "${local.prefix}-rg"
@@ -116,27 +115,29 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 ############################################
-# KEY VAULT
+# KEY VAULT (RBAC ENABLED)
 ############################################
 
 resource "azurerm_key_vault" "kv" {
-  name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-  location                    = azurerm_resource_group.rg.location
-  resource_group_name         = azurerm_resource_group.rg.name
-  tenant_id                   = data.azurerm_client_config.current.tenant_id
-  sku_name                    = "standard"
+  name                       = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
+  location                   = azurerm_resource_group.rg.location
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+
+  enable_rbac_authorization  = true
 
   tags = local.common_tags
 }
 
 ############################################
-# Initial secret placeholder
+# RBAC — Terraform / TFC identity
 ############################################
 
-resource "azurerm_key_vault_secret" "jenkins_token" {
-  name         = var.vault_secret_name
-  value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
-  key_vault_id = azurerm_key_vault.kv.id
+resource "azurerm_role_assignment" "tf_kv_secrets_officer" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 ############################################
@@ -185,7 +186,6 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
     type = "SystemAssigned"
   }
 
-  # cloud-init (base64 encoded)
   custom_data = base64encode(local.cloudinit_content)
 
   lifecycle {
@@ -198,13 +198,25 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 }
 
 ############################################
-# Grant VM managed identity access to Key Vault AFTER VM creation
+# RBAC — Jenkins VM Managed Identity
 ############################################
 
-resource "azurerm_key_vault_access_policy" "vm_kv_man_policy" {
-  key_vault_id = azurerm_key_vault.kv.id
-  tenant_id    = data.azurerm_client_config.current.tenant_id
-  object_id    = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
+resource "azurerm_role_assignment" "vm_kv_secrets_reader" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azurerm_linux_virtual_machine.jenkins.identity[0].principal_id
+}
 
-  secret_permissions = ["Get", "List"]
+############################################
+# Jenkins API Token Secret
+############################################
+
+resource "azurerm_key_vault_secret" "jenkins_token" {
+  name         = var.vault_secret_name
+  value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
+  key_vault_id = azurerm_key_vault.kv.id
+
+  depends_on = [
+    azurerm_role_assignment.tf_kv_secrets_officer
+  ]
 }
