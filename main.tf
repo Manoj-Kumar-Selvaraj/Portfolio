@@ -10,6 +10,7 @@ locals {
     resource_group_name = "${local.prefix}-rg"
     vm_name             = var.vm_name
     IDLE_MINUTES        = 5
+    vault_secret_name   = var.vault_secret_name
   })
 
   common_tags = {
