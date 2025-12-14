@@ -32,10 +32,10 @@ jobs:
               /opt/jenkins-install
 
             echo "==> Ensuring install script is executable"
-            sudo chmod +x /opt/jenkins-install/install.sh
+            sudo chmod +x /opt/jenkins-install/scripts/install.sh
 
             echo "==> Running install.sh"
-            sudo bash /opt/jenkins-install/install.sh
+            sudo bash /opt/jenkins-install/scripts/install.sh
 
             echo "==> Reloading systemd"
             sudo systemctl daemon-reload
