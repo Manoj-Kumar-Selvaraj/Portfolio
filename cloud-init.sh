@@ -7,14 +7,24 @@ apt-get install -y git curl ca-certificates
 
 # Clone repo
 cd /opt
-git clone -b Azure-Scripts https:https://github.com/Manoj-Kumar-Selvaraj/Portfolio /opt/jenkins-install
 
-# Export env vars from Terraform
-export AZURE_KV_NAME="${key_vault_name}"
-export VM_RG="${resource_group_name}"
-export VM_NAME="${vm_name}"
-export IDLE_MINUTES=${IDLE_MINUTES}
-export KV_SECRET_NAME="${vault_secret_name}"
+if [ ! -d /opt/jenkins-install ]; then
+   echo "directory exists"
+   git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git /opt/jenkins-install
+   cd /opt/jenkins-install
+   git fetch origin
+   git checkout Azure-Scripts
+   git pull
+else
+  mkdir /opt/jenkins-install
+  git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git /opt/jenkins-install
+  cd /opt/jenkins-install
+  git fetch origin
+  git checkout Azure-Scripts
+  git pull
+else
+fi
+
 
 # Run installer
 cd /opt/jenkins-install
