@@ -3,13 +3,13 @@ set -euo pipefail
 
 SERVICE_NAME="jenkins-idle-shutdown.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
-
 WATCHER_SCRIPT="/opt/jenkins-install/scripts/idle-shutdown.sh"
 
-# >>> CONFIGURE ONCE <<<
+# -------- CONFIGURE HERE --------
 VM_RG="portfolio-rg"
 VM_NAME="jenkins-vm"
 IDLE_MINUTES="30"
+# --------------------------------
 
 echo "==> Stopping existing service..."
 systemctl stop "${SERVICE_NAME}" || true
@@ -24,9 +24,9 @@ if [[ ! -f "${WATCHER_SCRIPT}" ]]; then
   exit 1
 fi
 
-# Safety check: ensure we didn't bind the installer script by mistake
-if grep -q "Stopping service if running" "${WATCHER_SCRIPT}"; then
-  echo "ERROR: ${WATCHER_SCRIPT} looks like an installer, not a watcher"
+# Guardrail: ensure watcher is NOT an installer
+if grep -q "systemctl stop" "${WATCHER_SCRIPT}"; then
+  echo "ERROR: ${WATCHER_SCRIPT} contains systemctl calls (wrong file)"
   exit 1
 fi
 
