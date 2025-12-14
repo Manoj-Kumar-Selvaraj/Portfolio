@@ -33,7 +33,7 @@ jobs:
 
             echo "==> Ensuring install script is executable"
             sudo chmod +x /opt/jenkins-install/scripts/install.sh
-
+            cd /opt/jenkins-install
             echo "==> Running install.sh"
             sudo bash /opt/jenkins-install/scripts/install.sh
 
