@@ -196,6 +196,32 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
   tags = local.common_tags
 }
 
+data "azurerm_virtual_machine" "jenkins_instance" {
+  name                = azurerm_linux_virtual_machine.jenkins.name
+  resource_group_name = azurerm_resource_group.rg.name
+}
+
+
+resource "null_resource" "fail_if_cloudinit_failed" {
+  depends_on = [
+    azurerm_linux_virtual_machine.jenkins
+  ]
+
+  triggers = {
+    vm_id = azurerm_linux_virtual_machine.jenkins.id
+  }
+
+  provisioner "local-exec" {
+    command = <<EOT
+if echo '${jsonencode(data.azurerm_virtual_machine.jenkins_instance.instance_view)}' | grep -qi "Provisioning failed"; then
+  echo "❌ CLOUD-INIT FAILED — aborting Terraform"
+  exit 1
+fi
+EOT
+  }
+}
+
+
 ############################################
 # RBAC — Jenkins VM Managed Identity (read secrets)
 ############################################
