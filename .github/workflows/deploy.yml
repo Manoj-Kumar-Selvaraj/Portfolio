@@ -37,10 +37,4 @@ jobs:
             echo "==> Running install.sh"
             sudo bash /opt/jenkins-install/scripts/install.sh
 
-            echo "==> Reloading systemd"
-            sudo systemctl daemon-reload
-
-            echo "==> Restarting Jenkins idle shutdown service"
-            sudo systemctl restart jenkins-idle-shutdown
-
             echo "==> Deployment completed successfully"
