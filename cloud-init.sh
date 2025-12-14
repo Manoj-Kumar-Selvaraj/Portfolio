@@ -22,7 +22,6 @@ else
   git fetch origin
   git checkout Azure-Scripts
   git pull
-else
 fi
 
 
