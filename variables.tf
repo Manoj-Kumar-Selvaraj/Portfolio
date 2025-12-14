@@ -18,6 +18,10 @@ variable "ssh_pub_key" {
   type    = string
 }
 
+variable "ssh_pri_key" {
+  type    = string
+}
+
 variable "vm_size" {
   type    = string
   default = "Standard_B2s" # recommended for Jenkins controller
