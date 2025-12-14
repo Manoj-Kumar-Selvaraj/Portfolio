@@ -5,6 +5,6 @@ echo "Starting Jenkins on-demand installation"
 
 ./scripts/docker.sh
 ./scripts/jenkins.sh
-./scripts/systemd.sh
+./scripts/install-idle-shutdown-service.sh
 
 echo "Installation completed successfully"
