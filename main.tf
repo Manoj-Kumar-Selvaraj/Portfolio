@@ -19,7 +19,7 @@ locals {
 }
 
 ############################################
-# Client config
+# Client config (Terraform identity)
 ############################################
 
 data "azurerm_client_config" "current" {}
@@ -115,23 +115,22 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 ############################################
-# KEY VAULT (RBAC ENABLED)
+# Key Vault (RBAC ONLY – no access policies)
 ############################################
 
 resource "azurerm_key_vault" "kv" {
-  name                       = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-  location                   = azurerm_resource_group.rg.location
-  resource_group_name        = azurerm_resource_group.rg.name
-  tenant_id                  = data.azurerm_client_config.current.tenant_id
-  sku_name                   = "standard"
-
-  enable_rbac_authorization  = true
+  name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
+  location                    = azurerm_resource_group.rg.location
+  resource_group_name         = azurerm_resource_group.rg.name
+  tenant_id                   = data.azurerm_client_config.current.tenant_id
+  sku_name                    = "standard"
+  rbac_authorization_enabled  = true
 
   tags = local.common_tags
 }
 
 ############################################
-# RBAC — Terraform / TFC identity
+# RBAC — Terraform identity (write secrets)
 ############################################
 
 resource "azurerm_role_assignment" "tf_kv_secrets_officer" {
@@ -141,17 +140,17 @@ resource "azurerm_role_assignment" "tf_kv_secrets_officer" {
 }
 
 ############################################
-# VM cloud-init trigger (Hash-based)
+# Cloud-init hash trigger
 ############################################
 
 resource "null_resource" "cloudinit_hash" {
   triggers = {
-    content_sha = sha256(local.cloudinit_content)
+    sha = sha256(local.cloudinit_content)
   }
 }
 
 ############################################
-# VM instance
+# Jenkins VM
 ############################################
 
 resource "azurerm_linux_virtual_machine" "jenkins" {
@@ -198,7 +197,7 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 }
 
 ############################################
-# RBAC — Jenkins VM Managed Identity
+# RBAC — Jenkins VM Managed Identity (read secrets)
 ############################################
 
 resource "azurerm_role_assignment" "vm_kv_secrets_reader" {
@@ -208,7 +207,7 @@ resource "azurerm_role_assignment" "vm_kv_secrets_reader" {
 }
 
 ############################################
-# Jenkins API Token Secret
+# Jenkins API Token Secret (placeholder)
 ############################################
 
 resource "azurerm_key_vault_secret" "jenkins_token" {
