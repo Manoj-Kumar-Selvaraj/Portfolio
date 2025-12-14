@@ -197,9 +197,16 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
   tags = local.common_tags
 }
 
-
 resource "null_resource" "cloudinit_logs" {
   depends_on = [azurerm_linux_virtual_machine.jenkins]
+
+  connection {
+    type        = "ssh"
+    user        = var.admin_username
+    private_key = file(var.ssh_private_key_path)
+    host        = azurerm_public_ip.pip.ip_address
+    timeout     = "10m"
+  }
 
   provisioner "remote-exec" {
     inline = [
