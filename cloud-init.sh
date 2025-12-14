@@ -115,9 +115,9 @@ cat > /opt/jenkins/idle-shutdown.sh <<'EOF'
 set -euo pipefail
 
 JENKINS_URL="http://localhost:8080"
-IDLE_MINUTES="${IDLE_MINUTES}"
-AZURE_RG="${VM_RG}"
-AZURE_VM_NAME="${VM_NAME}"
+IDLE_MINUTES=${IDLE_MINUTES}
+AZURE_RG="${resource_group_name}"
+AZURE_VM_NAME="${vm_name}"
 
 IDLE_MS=\$((IDLE_MINUTES * 60 * 1000))
 
