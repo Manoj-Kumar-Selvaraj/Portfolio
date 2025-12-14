@@ -1,59 +1,69 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SERVICE_NAME="jenkins-idle-shutdown.service"
-SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
-SCRIPT_PATH="/opt/jenkins-install/scripts/idle-shutdown.sh"
+# ----------------------------
+# Configuration (from systemd)
+# ----------------------------
+JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
+IDLE_MINUTES="${IDLE_MINUTES:-30}"
+CHECK_INTERVAL=30
 
-# >>> CONFIGURE THESE <<<
-VM_RG="portfolio-rg"
-VM_NAME="jenkins-vm"
-IDLE_MINUTES="30"
+VM_RG="${VM_RG:?VM_RG is required}"
+VM_NAME="${VM_NAME:?VM_NAME is required}"
 
-echo "==> Stopping service if running..."
-systemctl stop "${SERVICE_NAME}" || true
+IDLE_MS=$((IDLE_MINUTES * 60 * 1000))
+DEALLOCATED_FLAG="/var/run/jenkins_vm_deallocated"
 
-echo "==> Disabling service if enabled..."
-systemctl disable "${SERVICE_NAME}" || true
+log() {
+  echo "[idle-shutdown] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"
+}
 
-echo "==> Removing existing service file..."
-rm -f "${SERVICE_PATH}"
+now_ms() {
+  date +%s%3N
+}
 
-echo "==> Validating idle shutdown script..."
-if [[ ! -f "${SCRIPT_PATH}" ]]; then
-  echo "ERROR: ${SCRIPT_PATH} not found"
-  exit 1
-fi
-chmod +x "${SCRIPT_PATH}"
+wait_for_jenkins() {
+  until curl -sf "${JENKINS_URL}/login" >/dev/null; do
+    log "Waiting for Jenkins to become available..."
+    sleep 10
+  done
+}
 
-echo "==> Recreating service file..."
-cat <<EOF > "${SERVICE_PATH}"
-[Unit]
-Description=Jenkins Idle Shutdown Service
-After=docker.service network-online.target
-Wants=network-online.target
+get_last_completed_ms() {
+  curl -sf "${JENKINS_URL}/api/json?tree=jobs[name,lastCompletedBuild[timestamp]]" \
+    | jq '[.jobs[].lastCompletedBuild.timestamp] | map(select(. != null)) | max // 0' \
+    || echo 0
+}
 
-[Service]
-Type=simple
-ExecStart=${SCRIPT_PATH}
-Restart=always
-RestartSec=15
-User=root
+# ----------------------------
+# Main loop
+# ----------------------------
+log "Starting Jenkins idle shutdown watcher"
+wait_for_jenkins
+log "Jenkins is reachable"
 
-Environment=VM_RG=${VM_RG}
-Environment=VM_NAME=${VM_NAME}
-Environment=IDLE_MINUTES=${IDLE_MINUTES}
+while true; do
+  busy="$(curl -sf "${JENKINS_URL}/api/json" | jq -r '.busyExecutors // 0' || echo 0)"
+  queue_len="$(curl -sf "${JENKINS_URL}/queue/api/json" | jq '.items | length' || echo 0)"
 
-[Install]
-WantedBy=multi-user.target
-EOF
+  log "busyExecutors=${busy}, queueLength=${queue_len}"
 
-echo "==> Reloading systemd daemon..."
-systemctl daemon-reexec
-systemctl daemon-reload
+  if [[ "${busy}" -eq 0 && "${queue_len}" -eq 0 ]]; then
+    last_ms="$(get_last_completed_ms)"
+    now="$(now_ms)"
 
-echo "==> Enabling and starting service..."
-systemctl enable --now "${SERVICE_NAME}"
+    if [[ "${last_ms}" -ne 0 ]]; then
+      idle=$((now - last_ms))
+      log "Idle for $((idle / 1000)) seconds"
 
-echo "==> Service recreated successfully."
-systemctl status "${SERVICE_NAME}" --no-pager
+      if [[ "${idle}" -ge "${IDLE_MS}" && ! -f "${DEALLOCATED_FLAG}" ]]; then
+        log "Idle threshold reached, deallocating VM"
+        az login --identity >/dev/null 2>&1 || true
+        az vm deallocate -g "${VM_RG}" -n "${VM_NAME}" --no-wait
+        touch "${DEALLOCATED_FLAG}"
+      fi
+    fi
+  fi
+
+  sleep "${CHECK_INTERVAL}"
+done
