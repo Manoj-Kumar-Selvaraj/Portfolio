@@ -132,7 +132,7 @@ get_last_completed_ms() {
 
 while true; do
   busy="$$(curl -s "$${JENKINS_URL}/api/json" | jq -r .busyExecutors)"
-  queue_len="$$(curl -s "${JENKINS_URL}/queue/api/json" | jq '.items | length')"
+  queue_len="$$(curl -s "$${JENKINS_URL}/queue/api/json" | jq '.items | length')"
 
   if [[ "$${busy}" -eq 0 && "$${queue_len}" -eq 0 ]]; then
     last_ms="$$(get_last_completed_ms)"
