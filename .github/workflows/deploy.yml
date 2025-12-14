@@ -1,0 +1,24 @@
+name: Deploy Jenkins Scripts to VM
+
+on:
+  push:
+    branches:
+      - Azure-Scripts
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Jenkins VM
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VM_IP }}
+          username: azureuser
+          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /opt/jenkins-install
+            git pull origin Azure-Scripts
+            sudo systemctl daemon-reload
+            sudo systemctl restart jenkins-idle-shutdown || true
