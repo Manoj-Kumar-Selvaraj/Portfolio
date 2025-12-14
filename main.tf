@@ -203,7 +203,7 @@ resource "null_resource" "cloudinit_logs" {
   connection {
     type        = "ssh"
     user        = var.admin_username
-    private_key = file(var.ssh_private_key_path)
+    private_key = var.ssh_pub_ke
     host        = azurerm_public_ip.pip.ip_address
     timeout     = "10m"
   }
