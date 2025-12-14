@@ -5,9 +5,9 @@ set -euo pipefail
 # Terraform-injected variables
 ############################################
 
-AZURE_KV_NAME="${key_vault_name}"
-VM_RG="${resource_group_name}"
-VM_NAME="${vm_name}"
+AZURE_KV_NAME="$${key_vault_name}"
+VM_RG="$${resource_group_name}"
+VM_NAME="$${vm_name}"
 IDLE_MINUTES=${IDLE_MINUTES}
 
 JENKINS_HOME_DIR="/var/jenkins_home"
@@ -33,17 +33,17 @@ systemctl start docker
 # Jenkins container
 ############################################
 
-mkdir -p "${JENKINS_HOME_DIR}"
-chown 1000:1000 "${JENKINS_HOME_DIR}"
+mkdir -p "$${JENKINS_HOME_DIR}"
+chown 1000:1000 "$${JENKINS_HOME_DIR}"
 
 docker pull jenkins/jenkins:lts
 
 docker run -d \
-  --name "${JENKINS_CONTAINER_NAME}" \
+  --name "$${JENKINS_CONTAINER_NAME}" \
   --restart unless-stopped \
-  -p "${JENKINS_PORT}:8080" \
+  -p "$${JENKINS_PORT}:8080" \
   -p 50000:50000 \
-  -v "${JENKINS_HOME_DIR}:/var/jenkins_home" \
+  -v "$${JENKINS_HOME_DIR}:/var/jenkins_home" \
   jenkins/jenkins:lts
 
 ############################################
@@ -65,8 +65,8 @@ set -euo pipefail
 az login --identity >/dev/null 2>&1 || true
 
 az keyvault secret show \
-  --vault-name "${AZURE_KV_NAME}" \
-  --name "${KV_SECRET_NAME}" \
+  --vault-name "$${AZURE_KV_NAME}" \
+  --name "$${KV_SECRET_NAME}" \
   --query value -o tsv
 EOF
 
@@ -111,8 +111,8 @@ set -euo pipefail
 
 JENKINS_URL="http://localhost:8080"
 IDLE_MINUTES=${IDLE_MINUTES}
-AZURE_RG="${VM_RG}"
-AZURE_VM_NAME="${VM_NAME}"
+AZURE_RG="$${VM_RG}"
+AZURE_VM_NAME="$${VM_NAME}"
 
 IDLE_MS=$$((IDLE_MINUTES * 60 * 1000))
 
