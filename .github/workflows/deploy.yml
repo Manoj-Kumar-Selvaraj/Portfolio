@@ -10,15 +10,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy to Jenkins VM
+      - name: Deploy Jenkins scripts to VM
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
+          timeout: 10m
           script: |
-            set -e
-            cd /opt/jenkins-install
-            git pull origin Azure-Scripts
+            set -euo pipefail
+
+            echo "==> Stopping services (if running)"
+            sudo systemctl stop jenkins-idle-shutdown || true
+
+            echo "==> Cleaning old repo"
+            sudo rm -rf /opt/jenkins-install
+
+            echo "==> Fresh clone from GitHub"
+            sudo git clone -b Azure-Scripts \
+              https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
+              /opt/jenkins-install
+
+            echo "==> Ensuring install script is executable"
+            sudo chmod +x /opt/jenkins-install/install.sh
+
+            echo "==> Running install.sh"
+            sudo bash /opt/jenkins-install/install.sh
+
+            echo "==> Reloading systemd"
             sudo systemctl daemon-reload
-            sudo systemctl restart jenkins-idle-shutdown || true
+
+            echo "==> Restarting Jenkins idle shutdown service"
+            sudo systemctl restart jenkins-idle-shutdown
+
+            echo "==> Deployment completed successfully"
