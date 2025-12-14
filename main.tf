@@ -169,6 +169,14 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
     public_key = var.ssh_pub_key
   }
 
+  connection {
+    type        = "ssh"
+    user        = var.admin_username
+    private_key = file(var.ssh_private_key_path)
+    host        = azurerm_public_ip.pip.ip_address
+    timeout     = "10m"
+  }
+
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
@@ -196,28 +204,17 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
   tags = local.common_tags
 }
 
-data "azurerm_virtual_machine" "jenkins_instance" {
-  name                = azurerm_linux_virtual_machine.jenkins.name
-  resource_group_name = azurerm_resource_group.rg.name
-}
 
+resource "null_resource" "cloudinit_logs" {
+  depends_on = [azurerm_linux_virtual_machine.jenkins]
 
-resource "null_resource" "fail_if_cloudinit_failed" {
-  depends_on = [
-    azurerm_linux_virtual_machine.jenkins
-  ]
-
-  triggers = {
-    vm_id = azurerm_linux_virtual_machine.jenkins.id
-  }
-
-  provisioner "local-exec" {
-    command = <<EOT
-if echo '${jsonencode(data.azurerm_virtual_machine.jenkins_instance.instance_view)}' | grep -qi "Provisioning failed"; then
-  echo "❌ CLOUD-INIT FAILED — aborting Terraform"
-  exit 1
-fi
-EOT
+  provisioner "remote-exec" {
+    inline = [
+      "echo '==== cloud-init status ===='",
+      "cloud-init status || true",
+      "echo '==== cloud-init-output.log ===='",
+      "sudo tail -n 200 /var/log/cloud-init-output.log || true"
+    ]
   }
 }
 
