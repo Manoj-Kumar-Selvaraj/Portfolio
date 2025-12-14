@@ -80,23 +80,23 @@ cat > /opt/jenkins/trigger_job_local.sh <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-JOB_NAME="\${1:-deploy-site}"
+JOB_NAME="$${1:-deploy-site}"
 JENKINS_URL="http://localhost:8080"
 
-CRED=\$(/opt/jenkins/fetch_jenkins_token.sh)
-JUSER=\$(echo "\${CRED}" | cut -d: -f1)
-JTOKEN=\$(echo "\${CRED}" | cut -d: -f2-)
+CRED=$$(/opt/jenkins/fetch_jenkins_token.sh)
+JUSER=$$(echo "$${CRED}" | cut -d: -f1)
+JTOKEN=$$(echo "$${CRED}" | cut -d: -f2-)
 
-CRUMB_JSON=\$(curl -s -u "\${JUSER}:\${JTOKEN}" "\${JENKINS_URL}/crumbIssuer/api/json")
-CRUMB=\$(echo "\${CRUMB_JSON}" | jq -r .crumb)
-CRUMB_FIELD=\$(echo "\${CRUMB_JSON}" | jq -r .crumbRequestField)
+CRUMB_JSON=$$(curl -s -u "$${JUSER}:$${JTOKEN}" "$${JENKINS_URL}/crumbIssuer/api/json")
+CRUMB=$$(echo "$${CRUMB_JSON}" | jq -r .crumb)
+CRUMB_FIELD=$$(echo "$${CRUMB_JSON}" | jq -r .crumbRequestField)
 
 curl -X POST \
-  -u "\${JUSER}:\${JTOKEN}" \
-  -H "\${CRUMB_FIELD}: \${CRUMB}" \
-  "\${JENKINS_URL}/job/\${JOB_NAME}/build?delay=0"
+  -u "$${JUSER}:$${JTOKEN}" \
+  -H "$${CRUMB_FIELD}: $${CRUMB}" \
+  "$${JENKINS_URL}/job/$${JOB_NAME}/build?delay=0"
 
-echo "Triggered job: \${JOB_NAME}"
+echo "Triggered job: $${JOB_NAME}"
 EOF
 
 chmod +x /opt/jenkins/trigger_job_local.sh
@@ -114,30 +114,30 @@ IDLE_MINUTES=${IDLE_MINUTES}
 AZURE_RG="${VM_RG}"
 AZURE_VM_NAME="${VM_NAME}"
 
-IDLE_MS=\$((IDLE_MINUTES * 60 * 1000))
+IDLE_MS=$$((IDLE_MINUTES * 60 * 1000))
 
 now_ms() {
   date +%s%3N
 }
 
 get_last_completed_ms() {
-  curl -s "\${JENKINS_URL}/api/json?tree=jobs[name,lastCompletedBuild[timestamp]]" \
+  curl -s "$${JENKINS_URL}/api/json?tree=jobs[name,lastCompletedBuild[timestamp]]" \
     | jq '[.jobs[].lastCompletedBuild.timestamp] | map(select(. != null)) | max // 0'
 }
 
 while true; do
-  busy=\$(curl -s "\${JENKINS_URL}/api/json" | jq -r .busyExecutors)
-  queue_len=\$(curl -s "\${JENKINS_URL}/queue/api/json" | jq '.items | length')
+  busy=$$(curl -s "$${JENKINS_URL}/api/json" | jq -r .busyExecutors)
+  queue_len=$$(curl -s "$${JENKINS_URL}/queue/api/json" | jq '.items | length')
 
-  if [[ "\${busy}" -eq 0 && "\${queue_len}" -eq 0 ]]; then
-    last_ms=\$(get_last_completed_ms)
-    now=\$(now_ms)
+  if [[ "$${busy}" -eq 0 && "$${queue_len}" -eq 0 ]]; then
+    last_ms=$$(get_last_completed_ms)
+    now=$$(now_ms)
 
-    if [[ "\${last_ms}" -ne 0 ]]; then
-      idle=\$((now - last_ms))
-      if [[ "\${idle}" -ge "\${IDLE_MS}" ]]; then
+    if [[ "$${last_ms}" -ne 0 ]]; then
+      idle=$$((now - last_ms))
+      if [[ "$${idle}" -ge "$${IDLE_MS}" ]]; then
         az login --identity >/dev/null 2>&1 || true
-        az vm deallocate -g "\${AZURE_RG}" -n "\${AZURE_VM_NAME}" --no-wait
+        az vm deallocate -g "$${AZURE_RG}" -n "$${AZURE_VM_NAME}" --no-wait
         exit 0
       fi
     fi
