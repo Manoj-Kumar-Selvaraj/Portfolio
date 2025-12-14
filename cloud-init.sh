@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -e
 
 ############################################
-# Terraform-injected variables (SAFE)
+# Terraform-injected variables
 ############################################
 
 AZURE_KV_NAME="${key_vault_name}"
 VM_RG="${resource_group_name}"
 VM_NAME="${vm_name}"
-IDLE_MINUTES="${IDLE_MINUTES}"
+IDLE_MINUTES=${IDLE_MINUTES}
 
 JENKINS_HOME_DIR="/var/jenkins_home"
 JENKINS_PORT=8080
@@ -23,9 +23,13 @@ apt-get update -y
 DEBIAN_FRONTEND=noninteractive apt-get install -y \
   ca-certificates \
   curl \
-  jq \
-  docker.io
+  jq
 
+############################################
+# Install Docker (Ubuntu-native, cloud-init safe)
+############################################
+
+apt-get install -y docker.io
 systemctl enable docker
 systemctl start docker
 
@@ -33,21 +37,20 @@ systemctl start docker
 # Jenkins container
 ############################################
 
-mkdir -p "${JENKINS_HOME_DIR}"
-chown 1000:1000 "${JENKINS_HOME_DIR}"
+mkdir -p "$${JENKINS_HOME_DIR}"
+chown 1000:1000 "$${JENKINS_HOME_DIR}"
 
 docker pull jenkins/jenkins:lts
 
-docker run -d \
-  --name "${JENKINS_CONTAINER_NAME}" \
+docker run -d --name "$${JENKINS_CONTAINER_NAME}" \
   --restart unless-stopped \
-  -p "${JENKINS_PORT}:8080" \
+  -p "$${JENKINS_PORT}":8080 \
   -p 50000:50000 \
-  -v "${JENKINS_HOME_DIR}:/var/jenkins_home" \
+  -v "$${JENKINS_HOME_DIR}":/var/jenkins_home \
   jenkins/jenkins:lts
 
 ############################################
-# Azure CLI (Managed Identity)
+# Install Azure CLI (Managed Identity)
 ############################################
 
 curl -sL https://aka.ms/InstallAzureCLIDeb | bash
@@ -58,18 +61,17 @@ mkdir -p /opt/jenkins
 # fetch_jenkins_token.sh
 ############################################
 
-cat > /opt/jenkins/fetch_jenkins_token.sh <<'EOF'
+cat > /opt/jenkins/fetch_jenkins_token.sh <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
 
-VAULT_NAME="${AZURE_KV_NAME}"
+VAULT_NAME="${key_vault_name}"
 SECRET_NAME="jenkins-apitoken"
 
 az login --identity >/dev/null 2>&1 || true
-
 az keyvault secret show \
-  --vault-name "${VAULT_NAME}" \
-  --name "${SECRET_NAME}" \
+  --vault-name "\$VAULT_NAME" \
+  --name "\$SECRET_NAME" \
   --query value -o tsv
 EOF
 
@@ -83,23 +85,23 @@ cat > /opt/jenkins/trigger_job_local.sh <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
 
-JOB_NAME="${1:-deploy-site}"
+JOB_NAME="$${1:-deploy-site}"
 JENKINS_URL="http://localhost:8080"
 
-CRED="$(/opt/jenkins/fetch_jenkins_token.sh)"
-JUSER="${CRED%%:*}"
-JTOKEN="${CRED#*:}"
+CRED=$$(/opt/jenkins/fetch_jenkins_token.sh)
+JUSER=$$(echo "$$CRED" | cut -d: -f1)
+JTOKEN=$$(echo "$$CRED" | cut -d: -f2-)
 
-CRUMB_JSON="$(curl -s -u "${JUSER}:${JTOKEN}" \
-  "${JENKINS_URL}/crumbIssuer/api/json")"
-
-CRUMB="$(echo "${CRUMB_JSON}" | jq -r .crumb)"
-CRUMB_FIELD="$(echo "${CRUMB_JSON}" | jq -r .crumbRequestField)"
+CRUMB_JSON=$$(curl -s -u "$${JUSER}:$${JTOKEN}" "$${JENKINS_URL}/crumbIssuer/api/json" || true)
+CRUMB=$$(echo "$$CRUMB_JSON" | jq -r .crumb)
+CRUMB_FIELD=$$(echo "$$CRUMB_JSON" | jq -r .crumbRequestField)
 
 curl -X POST \
-  -u "${JUSER}:${JTOKEN}" \
-  -H "${CRUMB_FIELD}: ${CRUMB}" \
-  "${JENKINS_URL}/job/${JOB_NAME}/build?delay=0"
+  -u "$${JUSER}:$${JTOKEN}" \
+  -H "$${CRUMB_FIELD}: $${CRUMB}" \
+  "$${JENKINS_URL}/job/$${JOB_NAME}/build?delay=0"
+
+echo "Triggered job: $${JOB_NAME}"
 EOF
 
 chmod +x /opt/jenkins/trigger_job_local.sh
