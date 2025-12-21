@@ -16,15 +16,15 @@ on:
       force_nginx:
         description: "Force Nginx reconfiguration (true/false)."
         required: false
-        default: ''
+        default: 'true'
       force_controller:
         description: "Force Jenkins controller reconfiguration (true/false)."
         required: false
-        default: ''
+        default: 'false'
       force_agent:
         description: "Force Jenkins agent reconfiguration (true/false)."
         required: false
-        default: ''
+        default: 'false'
 
 jobs:
   deploy:
