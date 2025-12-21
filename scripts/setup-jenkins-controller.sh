@@ -11,6 +11,15 @@ JENKINS_IMAGE="jenkins/jenkins:lts"
 JENKINS_PORT=8080
 
 echo "Preparing Jenkins home..."
+# If Jenkins controller container is already running and responding, skip installation
+if docker ps --filter "name=$JENKINS_CONTAINER" --filter "status=running" --format '{{.Names}}' | grep -q "^${JENKINS_CONTAINER}$" 2>/dev/null; then
+  echo "Detected running container ${JENKINS_CONTAINER}. Verifying responsiveness..."
+  if curl -sf "http://127.0.0.1:${JENKINS_PORT}/login" >/dev/null 2>&1; then
+    echo "Jenkins HTTP endpoint responding. Skipping controller setup."
+    exit 0
+  fi
+  echo "Running container found but Jenkins not yet ready; continuing setup to ensure configuration."
+fi
 sudo mkdir -p "$JENKINS_HOME"
 sudo chown -R 1000:1000 "$JENKINS_HOME"
 sudo chmod 755 "$JENKINS_HOME"
