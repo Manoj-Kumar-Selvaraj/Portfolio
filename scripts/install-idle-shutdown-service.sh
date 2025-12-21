@@ -74,7 +74,7 @@ systemctl daemon-reload
 
 echo "==> Enabling and starting service..."
 systemctl enable --now "${SERVICE_NAME}"
-
+systemctl start "${SERVICE_NAME}"
 echo "==> Service installed successfully"
 systemctl status "${SERVICE_NAME}" --no-pager
 
