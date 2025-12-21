@@ -40,7 +40,12 @@ jobs:
             sudo chmod -R +x /opt/jenkins-install/scripts/*
             cd /opt/jenkins-install
 
+            echo "==> Exporting Key Vault variables from GitHub secrets"
+            # These should be configured in the repository secrets
+            export AZURE_KV_NAME="${{ secrets.AZURE_KV_NAME }}"
+            export KV_SECRET_NAME="${{ secrets.KV_SECRET_NAME }}"
+
             echo "==> Running install.sh"
-            sudo bash /opt/jenkins-install/scripts/install.sh
+            sudo AZURE_KV_NAME="$AZURE_KV_NAME" KV_SECRET_NAME="$KV_SECRET_NAME" bash /opt/jenkins-install/scripts/install.sh
 
             echo "==> Deployment completed successfully"

@@ -19,7 +19,11 @@ log() {
 }
 
 now_ms() {
-  date +%s%3N
+  # Return current time in milliseconds since epoch reliably
+  # Use seconds and nanoseconds (GNU date) and convert to milliseconds
+  sec=$(date +%s)
+  nsec=$(date +%N)
+  printf '%s%03d' "$sec" "$((nsec / 1000000))"
 }
 
 wait_for_jenkins() {

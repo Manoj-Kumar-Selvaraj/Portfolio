@@ -5,7 +5,22 @@ echo "Triggering Jenkins job locally..."
 JOB_NAME="${1:-deploy-site}"
 JENKINS_URL="http://localhost:8080"
 
-CRED="$(./scripts/fetch_jenkins_token.sh)"
+# Fetch credentials (expected format: user:token)
+if ! CRED="$(./scripts/fetch_jenkins_token.sh)"; then
+  echo "ERROR: failed to fetch Jenkins credentials" >&2
+  exit 1
+fi
+
+if [[ -z "${CRED}" ]]; then
+  echo "ERROR: empty credentials received from fetch_jenkins_token.sh" >&2
+  exit 1
+fi
+
+if ! echo "${CRED}" | grep -q ':'; then
+  echo "ERROR: credential format invalid. Expected 'user:token' (got: ${CRED})" >&2
+  exit 1
+fi
+
 JUSER="$(echo "${CRED}" | cut -d: -f1)"
 JTOKEN="$(echo "${CRED}" | cut -d: -f2-)"
 
