@@ -65,6 +65,7 @@ jobs:
           echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> $GITHUB_ENV
           echo "FORCE_AGENT=$FORCE_AGENT" >> $GITHUB_ENV
 
+
       # -----------------------------------------
       # Azure Login (OIDC – no secrets)
       # -----------------------------------------
