@@ -210,27 +210,3 @@ resource "azurerm_key_vault_secret" "jenkins_token" {
   key_vault_id = azurerm_key_vault.kv.id
   depends_on   = [azurerm_role_assignment.tf_kv_secrets_officer]
 }
-
-############################################
-# GitHub OIDC → EXISTING Service Principal
-############################################
-
-resource "azuread_service_principal" "github_oidc" {
-  client_id = var.github_oidc_client_id
-}
-
-############################################
-# GitHub Actions → KV + RG read
-############################################
-
-resource "azurerm_role_assignment" "github_kv_secrets_reader" {
-  scope                = azurerm_key_vault.kv.id
-  role_definition_name = "Key Vault Secrets User"
-  principal_id         = azuread_service_principal.github_oidc.object_id
-}
-
-resource "azurerm_role_assignment" "github_rg_reader" {
-  scope                = azurerm_resource_group.rg.id
-  role_definition_name = "Reader"
-  principal_id         = azuread_service_principal.github_oidc.object_id
-}
