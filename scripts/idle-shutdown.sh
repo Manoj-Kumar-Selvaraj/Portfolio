@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -Eeuo pipefail
+
 # Force C locale for predictable date parsing
 export LC_ALL=C
 echo "Starting Jenkins idle shutdown script"

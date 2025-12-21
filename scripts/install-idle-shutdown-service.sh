@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -Eeuo pipefail
+
 echo "Installing Jenkins idle shutdown service..."
 
 SERVICE_NAME="jenkins-idle-shutdown.service"

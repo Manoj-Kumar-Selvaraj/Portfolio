@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euxo pipefail
+set -Eeuo pipefail
 
 echo "========================================"
 echo " Setting up Nginx as Jenkins Reverse Proxy"

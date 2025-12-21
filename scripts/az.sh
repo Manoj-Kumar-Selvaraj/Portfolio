@@ -1,7 +1,6 @@
-#!/usr/bin/bash
-# Install the Azure CLI on Linux
-# Reference: https://learn.microsoft.com/en-us/cli/azure/install-azure-cli-linux
-set -euo pipefail
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
 echo "Installing Azure CLI..."
 
 sudo apt-get update

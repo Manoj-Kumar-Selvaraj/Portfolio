@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
 # Fetch Jenkins token from Azure Key Vault and output only the secret value
 # Require environment variables to be set; give clear errors otherwise
