@@ -40,3 +40,8 @@ variable "key_vault_name" {
 variable "vault_secret_name" {
   type    = string 
 }
+
+variable "github_oidc_client_id" {
+  description = "Client ID of existing GitHub OIDC App Registration"
+  type        = string
+}

@@ -20,7 +20,7 @@ locals {
 }
 
 ############################################
-# Client config (Terraform identity)
+# Client config
 ############################################
 
 data "azurerm_client_config" "current" {}
@@ -66,45 +66,33 @@ resource "azurerm_network_security_group" "nsg" {
     access                     = "Allow"
     protocol                   = "Tcp"
     source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
-    source_port_range          = "*"
     destination_port_range     = "22"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
   }
 
   security_rule {
-    name                       = "Allow-Jenkins"
+    name                       = "Allow-HTTP"
     priority                   = 1002
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
+    destination_port_range     = "80"
     source_port_range          = "*"
-    destination_port_range     = "8080"
+    destination_address_prefix = "*"
   }
 
   security_rule {
-    name                       = "Allow-HTTP"
+    name                       = "Allow-HTTPS"
     priority                   = 1003
     direction                  = "Inbound"
     access                     = "Allow"
     protocol                   = "Tcp"
     source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
-    source_port_range          = "*"
-    destination_port_range     = "80"
-  }
-
-  security_rule {
-    name                       = "Allow-HTTPS"
-    priority                   = 1004
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_address_prefix      = "Internet"
-    destination_address_prefix = "*"
-    source_port_range          = "*"
     destination_port_range     = "443"
+    source_port_range          = "*"
+    destination_address_prefix = "*"
   }
 
   tags = local.common_tags
@@ -154,7 +142,7 @@ resource "azurerm_key_vault" "kv" {
 }
 
 ############################################
-# RBAC — Terraform identity (write secrets)
+# Terraform SP → KV write
 ############################################
 
 resource "azurerm_role_assignment" "tf_kv_secrets_officer" {
@@ -203,7 +191,7 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
 }
 
 ############################################
-# RBAC — Jenkins VM Managed Identity (read secrets)
+# Jenkins VM → KV read
 ############################################
 
 resource "azurerm_role_assignment" "vm_kv_secrets_reader" {
@@ -213,7 +201,7 @@ resource "azurerm_role_assignment" "vm_kv_secrets_reader" {
 }
 
 ############################################
-# Jenkins API Token Secret (placeholder)
+# Jenkins API token placeholder
 ############################################
 
 resource "azurerm_key_vault_secret" "jenkins_token" {
@@ -224,37 +212,15 @@ resource "azurerm_key_vault_secret" "jenkins_token" {
 }
 
 ############################################
-# Azure AD Application (GitHub OIDC)
-############################################
-
-resource "azuread_application" "github_oidc" {
-  display_name = "${local.prefix}-github-oidc"
-}
-
-############################################
-# Service Principal (FIXED)
+# GitHub OIDC → EXISTING Service Principal
 ############################################
 
 resource "azuread_service_principal" "github_oidc" {
-  client_id = azuread_application.github_oidc.client_id
+  client_id = var.github_oidc_client_id
 }
 
 ############################################
-# GitHub OIDC Federated Credential (FIXED)
-############################################
-
-resource "azuread_application_federated_identity_credential" "github_oidc" {
-  application_id = azuread_application.github_oidc.id
-
-  display_name = "github-actions-oidc"
-  description  = "OIDC for GitHub Actions"
-  audiences    = ["api://AzureADTokenExchange"]
-  issuer       = "https://token.actions.githubusercontent.com"
-  subject      = "repo:Manoj-Kumar-Selvaraj/Portfolio:ref:refs/heads/Azure-Scripts"
-}
-
-############################################
-# RBAC — GitHub OIDC → Key Vault + RG
+# GitHub Actions → KV + RG read
 ############################################
 
 resource "azurerm_role_assignment" "github_kv_secrets_reader" {
