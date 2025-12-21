@@ -33,7 +33,7 @@ jobs:
 
     steps:
       # ------------------------------------------------------------
-      # STEP 1: Checkout repo (needed for commit message parsing)
+      # STEP 1: Checkout
       # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 1
 
       # ------------------------------------------------------------
-      # STEP 2: Resolve FORCE flags on runner
+      # STEP 2: Resolve FORCE flags
       # ------------------------------------------------------------
       - name: Resolve force flags
         shell: bash
@@ -62,7 +62,6 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
             commit_msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
-
             [[ "$commit_msg" =~ \[force\] ]] && FORCE=1
             [[ "$commit_msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
             [[ "$commit_msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
@@ -74,7 +73,6 @@ jobs:
             FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
           fi
 
-          # Inherit from global FORCE if component flag not explicitly set
           [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
           [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
@@ -84,24 +82,18 @@ jobs:
           echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> "$GITHUB_ENV"
           echo "FORCE_AGENT=$FORCE_AGENT" >> "$GITHUB_ENV"
 
-          echo "Resolved flags:"
-          echo "  FORCE=$FORCE"
-          echo "  FORCE_NGINX=$FORCE_NGINX"
-          echo "  FORCE_CONTROLLER=$FORCE_CONTROLLER"
-          echo "  FORCE_AGENT=$FORCE_AGENT"
-
       # ------------------------------------------------------------
-      # STEP 3: Deploy to VM (explicit env injection)
+      # STEP 3: Deploy to VM
       # ------------------------------------------------------------
       - name: Deploy Jenkins scripts to VM
         uses: appleboy/ssh-action@v1.0.3
-        envs: |
-          FORCE,
-          FORCE_NGINX,
-          FORCE_CONTROLLER,
-          FORCE_AGENT,
-          AZURE_KV_NAME,
-          KV_SECRET_NAME
+        env:
+          FORCE: ${{ env.FORCE }}
+          FORCE_NGINX: ${{ env.FORCE_NGINX }}
+          FORCE_CONTROLLER: ${{ env.FORCE_CONTROLLER }}
+          FORCE_AGENT: ${{ env.FORCE_AGENT }}
+          AZURE_KV_NAME: ${{ secrets.AZURE_KV_NAME }}
+          KV_SECRET_NAME: ${{ secrets.KV_SECRET_NAME }}
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
@@ -110,19 +102,20 @@ jobs:
           script: |
             set -euxo pipefail
 
-            echo "==> Effective flags on VM"
+            FORCE="${FORCE:-0}"
+            FORCE_NGINX="${FORCE_NGINX:-0}"
+            FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
+            FORCE_AGENT="${FORCE_AGENT:-0}"
+
+            echo "==> Flags"
             echo "FORCE=$FORCE"
             echo "FORCE_NGINX=$FORCE_NGINX"
             echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
             echo "FORCE_AGENT=$FORCE_AGENT"
 
-            echo "==> Stopping services"
             sudo systemctl stop jenkins-idle-shutdown || true
+            sudo rm -rff /opt/jenkins-install
 
-            echo "==> Cleaning old repo"
-            sudo rm -rf /opt/jenkins-install
-
-            echo "==> Fresh clone"
             sudo git clone -b Azure-Scripts \
               https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
               /opt/jenkins-install
@@ -130,29 +123,25 @@ jobs:
             sudo chmod -R +x /opt/jenkins-install/scripts/*
             cd /opt/jenkins-install
 
-            echo "==> Ensuring nginx access log"
             sudo mkdir -p /var/log/nginx
             sudo touch /var/log/nginx/jenkins.access.log
             sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
             sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
 
-            echo "==> Running install.sh"
             sudo \
               FORCE="$FORCE" \
               FORCE_NGINX="$FORCE_NGINX" \
               FORCE_CONTROLLER="$FORCE_CONTROLLER" \
               FORCE_AGENT="$FORCE_AGENT" \
-              AZURE_KV_NAME="${AZURE_KV_NAME}" \
-              KV_SECRET_NAME="${KV_SECRET_NAME}" \
+              AZURE_KV_NAME="$AZURE_KV_NAME" \
+              KV_SECRET_NAME="$KV_SECRET_NAME" \
               bash /opt/jenkins-install/scripts/install.sh
 
-            echo "==> Reloading services"
             sudo systemctl daemon-reload
             sudo systemctl enable --now jenkins-idle-shutdown.service
             sudo systemctl restart nginx || true
 
-            echo "==> Status"
             sudo systemctl status jenkins-idle-shutdown --no-pager || true
             sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
 
-            echo "==> Deployment completed successfully"
+            echo "==> Deployment completed"
