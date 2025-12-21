@@ -1,72 +1,54 @@
-name: Deploy Jenkins Scripts to VM
+name: Deploy Jenkins (Azure Run Command)
 
 on:
   push:
-    branches:
-      - Azure-Scripts
+    branches: [ Azure-Scripts ]
 
   workflow_dispatch:
     inputs:
-      reason:
-        description: "Reason for manual run"
-        required: false
       force:
-        description: "Global force flag"
-        required: false
-        default: 'false'
+        description: "Global force"
+        default: "false"
       force_nginx:
-        description: "Force Nginx reconfiguration"
-        required: false
-        default: 'false'
+        description: "Force nginx"
+        default: "false"
       force_controller:
-        description: "Force Jenkins controller reconfiguration"
-        required: false
-        default: 'false'
+        description: "Force controller"
+        default: "false"
       force_agent:
-        description: "Force Jenkins agent reconfiguration"
-        required: false
-        default: 'false'
+        description: "Force agent"
+        default: "false"
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------------------------------------
-      # STEP 1: Checkout (needed for commit message parsing)
-      # ------------------------------------------------------------
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      # -----------------------------------------
+      # Checkout (only to read commit message)
+      # -----------------------------------------
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # ------------------------------------------------------------
-      # STEP 2: Resolve FORCE flags (runner-side)
-      # ------------------------------------------------------------
+      # -----------------------------------------
+      # Resolve FORCE flags (runner-side)
+      # -----------------------------------------
       - name: Resolve force flags
         shell: bash
         run: |
-          set -euo pipefail
-
           normalize() {
-            case "$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')" in
-              1|true|yes) echo 1 ;;
-              *) echo 0 ;;
-            esac
+            case "${1,,}" in true|1|yes) echo 1 ;; *) echo 0 ;; esac
           }
 
-          FORCE=0
-          FORCE_NGINX=0
-          FORCE_CONTROLLER=0
-          FORCE_AGENT=0
+          FORCE=0 FORCE_NGINX=0 FORCE_CONTROLLER=0 FORCE_AGENT=0
 
-          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
-            commit_msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
-
-            [[ "$commit_msg" =~ \[force\] ]] && FORCE=1
-            [[ "$commit_msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
-            [[ "$commit_msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
-            [[ "$commit_msg" =~ \[force-agent\] ]] && FORCE_AGENT=1
+          if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
+            msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
+            [[ "$msg" =~ \[force\] ]] && FORCE=1
+            [[ "$msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
+            [[ "$msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
+            [[ "$msg" =~ \[force-agent\] ]] && FORCE_AGENT=1
           else
             FORCE="$(normalize "${{ github.event.inputs.force }}")"
             FORCE_NGINX="$(normalize "${{ github.event.inputs.force_nginx }}")"
@@ -74,84 +56,39 @@ jobs:
             FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
           fi
 
-          # Inherit from global FORCE
           [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
           [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
 
-          echo "FORCE=$FORCE" >> "$GITHUB_ENV"
-          echo "FORCE_NGINX=$FORCE_NGINX" >> "$GITHUB_ENV"
-          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> "$GITHUB_ENV"
-          echo "FORCE_AGENT=$FORCE_AGENT" >> "$GITHUB_ENV"
+          echo "FORCE=$FORCE" >> $GITHUB_ENV
+          echo "FORCE_NGINX=$FORCE_NGINX" >> $GITHUB_ENV
+          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> $GITHUB_ENV
+          echo "FORCE_AGENT=$FORCE_AGENT" >> $GITHUB_ENV
 
-      # ------------------------------------------------------------
-      # STEP 3: Deploy to VM (authoritative execution)
-      # ------------------------------------------------------------
-      - name: Deploy Jenkins scripts to VM
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          FORCE: ${{ env.FORCE }}
-          FORCE_NGINX: ${{ env.FORCE_NGINX }}
-          FORCE_CONTROLLER: ${{ env.FORCE_CONTROLLER }}
-          FORCE_AGENT: ${{ env.FORCE_AGENT }}
-          AZURE_KV_NAME: ${{ secrets.AZURE_KV_NAME }}
-          KV_SECRET_NAME: ${{ secrets.KV_SECRET_NAME }}
+      # -----------------------------------------
+      # Azure Login (OIDC – no secrets)
+      # -----------------------------------------
+      - name: Azure Login
+        uses: azure/login@v1
         with:
-          host: ${{ secrets.VM_IP }}
-          username: azureuser
-          key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
-          timeout: 10m
-          script: |
-            set -euxo pipefail
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-            # ----------- Defensive defaults (set -u safe) -----------
-            FORCE="${FORCE:-0}"
-            FORCE_NGINX="${FORCE_NGINX:-0}"
-            FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
-            FORCE_AGENT="${FORCE_AGENT:-0}"
-            AZURE_KV_NAME="${AZURE_KV_NAME:-}"
-            KV_SECRET_NAME="${KV_SECRET_NAME:-}"
-
-            if [[ -z "$AZURE_KV_NAME" || -z "$KV_SECRET_NAME" ]]; then
-              echo "ERROR: Azure Key Vault variables are missing"
-              exit 1
-            fi
-
-            echo "==> Flags"
-            echo "FORCE=$FORCE"
-            echo "FORCE_NGINX=$FORCE_NGINX"
-            echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
-            echo "FORCE_AGENT=$FORCE_AGENT"
-
-            sudo systemctl stop jenkins-idle-shutdown || true
-            sudo rm -rf /opt/jenkins-install
-
-            sudo git clone -b Azure-Scripts \
-              https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
-              /opt/jenkins-install
-
-            sudo chmod -R +x /opt/jenkins-install/scripts/*
-            cd /opt/jenkins-install
-
-            sudo mkdir -p /var/log/nginx
-            sudo touch /var/log/nginx/jenkins.access.log
-            sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
-            sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
-
-            sudo env \
-              FORCE="$FORCE" \
-              FORCE_NGINX="$FORCE_NGINX" \
-              FORCE_CONTROLLER="$FORCE_CONTROLLER" \
-              FORCE_AGENT="$FORCE_AGENT" \
-              AZURE_KV_NAME="$AZURE_KV_NAME" \
-              KV_SECRET_NAME="$KV_SECRET_NAME" \
-              bash /opt/jenkins-install/scripts/install.sh
-
-            sudo systemctl daemon-reload
-            sudo systemctl enable --now jenkins-idle-shutdown.service
-            sudo systemctl restart nginx || true
-
-            sudo systemctl status jenkins-idle-shutdown --no-pager || true
-            sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
-
-            echo "==> Deployment completed successfully"
+      # -----------------------------------------
+      # Run Command (THIS REPLACES SSH)
+      # -----------------------------------------
+      - name: Run Jenkins install via Azure Run Command
+        run: |
+          az vm run-command invoke \
+            --resource-group portfolio-rg \
+            --name jenkins-vm \
+            --command-id RunShellScript \
+            --parameters \
+              FORCE=${FORCE} \
+              FORCE_NGINX=${FORCE_NGINX} \
+              FORCE_CONTROLLER=${FORCE_CONTROLLER} \
+              FORCE_AGENT=${FORCE_AGENT} \
+              AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
+              KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
+            --scripts @install.sh
