@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
+# Ensure HOME is set (Azure Run Command / sudo safety)
+export HOME="${HOME:-/root}"
+
 
 echo "========================================"
 echo " Jenkins Agent + Harbor Environment Setup"
