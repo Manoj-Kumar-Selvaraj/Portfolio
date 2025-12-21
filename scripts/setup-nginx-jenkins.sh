@@ -42,6 +42,9 @@ sudo systemctl reload nginx
 echo "Opening firewall (if enabled)..."
 sudo ufw allow 'Nginx Full' || true
 
+echo "Ensuring certbot dependencies are present..."
+sudo apt-get install -y python3-setuptools
+
 echo "Requesting Let's Encrypt certificate..."
 sudo certbot --nginx \
   -d "${DOMAIN}" \
