@@ -33,7 +33,7 @@ jobs:
 
     steps:
       # ------------------------------------------------------------
-      # STEP 1: Checkout (needed to read commit message reliably)
+      # STEP 1: Checkout repo (needed for commit message parsing)
       # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 1
 
       # ------------------------------------------------------------
-      # STEP 2: Resolve FORCE flags on GitHub runner
+      # STEP 2: Resolve FORCE flags on runner
       # ------------------------------------------------------------
       - name: Resolve force flags
         shell: bash
@@ -74,7 +74,7 @@ jobs:
             FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
           fi
 
-          # Inherit from global FORCE if per-component not explicitly set
+          # Inherit from global FORCE if component flag not explicitly set
           [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
           [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
@@ -91,10 +91,17 @@ jobs:
           echo "  FORCE_AGENT=$FORCE_AGENT"
 
       # ------------------------------------------------------------
-      # STEP 3: Deploy to VM (VM receives FINAL values only)
+      # STEP 3: Deploy to VM (explicit env injection)
       # ------------------------------------------------------------
       - name: Deploy Jenkins scripts to VM
         uses: appleboy/ssh-action@v1.0.3
+        envs: |
+          FORCE,
+          FORCE_NGINX,
+          FORCE_CONTROLLER,
+          FORCE_AGENT,
+          AZURE_KV_NAME,
+          KV_SECRET_NAME
         with:
           host: ${{ secrets.VM_IP }}
           username: azureuser
@@ -103,46 +110,48 @@ jobs:
           script: |
             set -euxo pipefail
 
-            echo "==> Stopping services (if running)"
+            echo "==> Effective flags on VM"
+            echo "FORCE=$FORCE"
+            echo "FORCE_NGINX=$FORCE_NGINX"
+            echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
+            echo "FORCE_AGENT=$FORCE_AGENT"
+
+            echo "==> Stopping services"
             sudo systemctl stop jenkins-idle-shutdown || true
 
             echo "==> Cleaning old repo"
             sudo rm -rf /opt/jenkins-install
 
-            echo "==> Fresh clone from GitHub"
+            echo "==> Fresh clone"
             sudo git clone -b Azure-Scripts \
               https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
               /opt/jenkins-install
 
-            echo "==> Ensuring scripts are executable"
             sudo chmod -R +x /opt/jenkins-install/scripts/*
             cd /opt/jenkins-install
-            
-            echo "==> Ensuring Jenkins nginx access log exists"
+
+            echo "==> Ensuring nginx access log"
             sudo mkdir -p /var/log/nginx
             sudo touch /var/log/nginx/jenkins.access.log
             sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
             sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
-            echo "==> Running install.sh with explicit env vars"
+
+            echo "==> Running install.sh"
             sudo \
-              FORCE="${FORCE}" \
-              FORCE_NGINX="${FORCE_NGINX}" \
-              FORCE_CONTROLLER="${FORCE_CONTROLLER}" \
-              FORCE_AGENT="${FORCE_AGENT}" \
-              AZURE_KV_NAME="${{ secrets.AZURE_KV_NAME }}" \
-              KV_SECRET_NAME="${{ secrets.KV_SECRET_NAME }}" \
+              FORCE="$FORCE" \
+              FORCE_NGINX="$FORCE_NGINX" \
+              FORCE_CONTROLLER="$FORCE_CONTROLLER" \
+              FORCE_AGENT="$FORCE_AGENT" \
+              AZURE_KV_NAME="${AZURE_KV_NAME}" \
+              KV_SECRET_NAME="${KV_SECRET_NAME}" \
               bash /opt/jenkins-install/scripts/install.sh
 
-
-
-            echo "==> Reloading systemd"
+            echo "==> Reloading services"
             sudo systemctl daemon-reload
             sudo systemctl enable --now jenkins-idle-shutdown.service
-
-            echo "==> Restarting nginx"
             sudo systemctl restart nginx || true
 
-            echo "==> Service status"
+            echo "==> Status"
             sudo systemctl status jenkins-idle-shutdown --no-pager || true
             sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
 
