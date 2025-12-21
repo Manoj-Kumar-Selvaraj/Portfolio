@@ -19,7 +19,7 @@ jobs:
           key: ${{ secrets.VM_SSH_PRIVATE_KEY }}
           timeout: 10m
           script: |
-            set -euo pipefail
+            set -euxo pipefail
 
             echo "==> Stopping services (if running)"
             sudo systemctl stop jenkins-idle-shutdown || true
