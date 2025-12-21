@@ -4,25 +4,26 @@ on:
   push:
     branches:
       - Azure-Scripts
-  workflow_dispatch:   # 👈 Enables manual trigger
+
+  workflow_dispatch:
     inputs:
       reason:
         description: "Reason for manual run"
         required: false
       force:
-        description: "Global force flag (true/false). Falls back if per-component flags unset."
+        description: "Global force flag"
         required: false
         default: 'false'
       force_nginx:
-        description: "Force Nginx reconfiguration (true/false)."
+        description: "Force Nginx reconfiguration"
         required: false
-        default: 'true'
+        default: 'false'
       force_controller:
-        description: "Force Jenkins controller reconfiguration (true/false)."
+        description: "Force Jenkins controller reconfiguration"
         required: false
         default: 'false'
       force_agent:
-        description: "Force Jenkins agent reconfiguration (true/false)."
+        description: "Force Jenkins agent reconfiguration"
         required: false
         default: 'false'
 
@@ -31,6 +32,67 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # ------------------------------------------------------------
+      # STEP 1: Checkout (needed to read commit message reliably)
+      # ------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      # ------------------------------------------------------------
+      # STEP 2: Resolve FORCE flags on GitHub runner
+      # ------------------------------------------------------------
+      - name: Resolve force flags
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          normalize() {
+            case "$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')" in
+              1|true|yes) echo 1 ;;
+              *) echo 0 ;;
+            esac
+          }
+
+          FORCE=0
+          FORCE_NGINX=0
+          FORCE_CONTROLLER=0
+          FORCE_AGENT=0
+
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            commit_msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
+
+            [[ "$commit_msg" =~ \[force\] ]] && FORCE=1
+            [[ "$commit_msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
+            [[ "$commit_msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
+            [[ "$commit_msg" =~ \[force-agent\] ]] && FORCE_AGENT=1
+          else
+            FORCE="$(normalize "${{ github.event.inputs.force }}")"
+            FORCE_NGINX="$(normalize "${{ github.event.inputs.force_nginx }}")"
+            FORCE_CONTROLLER="$(normalize "${{ github.event.inputs.force_controller }}")"
+            FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
+          fi
+
+          # Inherit from global FORCE if per-component not explicitly set
+          [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
+          [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
+          [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
+
+          echo "FORCE=$FORCE" >> "$GITHUB_ENV"
+          echo "FORCE_NGINX=$FORCE_NGINX" >> "$GITHUB_ENV"
+          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> "$GITHUB_ENV"
+          echo "FORCE_AGENT=$FORCE_AGENT" >> "$GITHUB_ENV"
+
+          echo "Resolved flags:"
+          echo "  FORCE=$FORCE"
+          echo "  FORCE_NGINX=$FORCE_NGINX"
+          echo "  FORCE_CONTROLLER=$FORCE_CONTROLLER"
+          echo "  FORCE_AGENT=$FORCE_AGENT"
+
+      # ------------------------------------------------------------
+      # STEP 3: Deploy to VM (VM receives FINAL values only)
+      # ------------------------------------------------------------
       - name: Deploy Jenkins scripts to VM
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -52,81 +114,35 @@ jobs:
               https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
               /opt/jenkins-install
 
-            echo "==> Ensuring install script is executable"
+            echo "==> Ensuring scripts are executable"
             sudo chmod -R +x /opt/jenkins-install/scripts/*
             cd /opt/jenkins-install
-
-            echo "==> Exporting Key Vault variables from GitHub secrets"
-            # These should be configured in the repository secrets
-            export AZURE_KV_NAME="${{ secrets.AZURE_KV_NAME }}"
-            export KV_SECRET_NAME="${{ secrets.KV_SECRET_NAME }}"
-
-            # Determine force flags for push vs manual run
-            if [ "${GITHUB_EVENT_NAME:-}" = "push" ]; then
-              # Read commit message from event payload (if available)
-              if [ -n "${GITHUB_EVENT_PATH:-}" ] && [ -f "${GITHUB_EVENT_PATH}" ]; then
-                commit_msg="$(jq -r .head_commit.message "${GITHUB_EVENT_PATH}" 2>/dev/null || true)"
-              else
-                commit_msg=""
-              fi
-
-              commit_msg_lc="$(echo "${commit_msg}" | tr '[:upper:]' '[:lower:]')"
-
-              # Global marker
-              if echo "$commit_msg_lc" | grep -q '\[force\]'; then
-                FORCE_INPUT='true'
-              else
-                FORCE_INPUT='false'
-              fi
-
-              # Per-component markers (empty string means inherit)
-              FORCE_NGINX="$(echo "$commit_msg_lc" | grep -q '\[force-nginx\]' && echo 'true' || echo '')"
-              FORCE_CONTROLLER="$(echo "$commit_msg_lc" | grep -q '\[force-controller\]' && echo 'true' || echo '')"
-              FORCE_AGENT="$(echo "$commit_msg_lc" | grep -q '\[force-agent\]' && echo 'true' || echo '')"
-            else
-              # Manual run: read inputs (will use YAML defaults if unset)
-              FORCE_INPUT='${{ github.event.inputs.force }}'
-              FORCE_NGINX='${{ github.event.inputs.force_nginx }}'
-              FORCE_CONTROLLER='${{ github.event.inputs.force_controller }}'
-              FORCE_AGENT='${{ github.event.inputs.force_agent }}'
-            fi
-
-            # Normalize helper: 'true|1|yes' -> 1, empty -> '', otherwise 0
-            normalize() {
-              case "$(echo "${1:-}" | tr '[:upper:]' '[:lower:]')" in
-                1|true|yes) echo 1 ;;
-                '') echo '' ;;
-                *) echo 0 ;;
-              esac
-            }
-
-            FORCE="$(normalize "$FORCE_INPUT")"
-            FORCE_NGINX="$(normalize "${FORCE_NGINX:-}")"
-            if [ -z "$FORCE_NGINX" ]; then FORCE_NGINX="$FORCE"; fi
-            FORCE_CONTROLLER="$(normalize "${FORCE_CONTROLLER:-}")"
-            if [ -z "$FORCE_CONTROLLER" ]; then FORCE_CONTROLLER="$FORCE"; fi
-            FORCE_AGENT="$(normalize "${FORCE_AGENT:-}")"
-            if [ -z "$FORCE_AGENT" ]; then FORCE_AGENT="$FORCE"; fi
-
-            export FORCE FORCE_NGINX FORCE_CONTROLLER FORCE_AGENT
-
-            echo "==> Running install.sh"
-            sudo FORCE="$FORCE" FORCE_NGINX="$FORCE_NGINX" FORCE_CONTROLLER="$FORCE_CONTROLLER" FORCE_AGENT="$FORCE_AGENT" AZURE_KV_NAME="$AZURE_KV_NAME" KV_SECRET_NAME="$KV_SECRET_NAME" bash /opt/jenkins-install/scripts/install.sh
-
+            
             echo "==> Ensuring Jenkins nginx access log exists"
             sudo mkdir -p /var/log/nginx
             sudo touch /var/log/nginx/jenkins.access.log
             sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
             sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
+            echo "==> Running install.sh with explicit env vars"
+            sudo \
+              FORCE="${FORCE}" \
+              FORCE_NGINX="${FORCE_NGINX}" \
+              FORCE_CONTROLLER="${FORCE_CONTROLLER}" \
+              FORCE_AGENT="${FORCE_AGENT}" \
+              AZURE_KV_NAME="${{ secrets.AZURE_KV_NAME }}" \
+              KV_SECRET_NAME="${{ secrets.KV_SECRET_NAME }}" \
+              bash /opt/jenkins-install/scripts/install.sh
 
-            echo "==> Reloading systemd and enabling service"
+
+
+            echo "==> Reloading systemd"
             sudo systemctl daemon-reload
             sudo systemctl enable --now jenkins-idle-shutdown.service
 
             echo "==> Restarting nginx"
             sudo systemctl restart nginx || true
 
-            echo "==> Service status and recent logs for verification"
+            echo "==> Service status"
             sudo systemctl status jenkins-idle-shutdown --no-pager || true
             sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
 

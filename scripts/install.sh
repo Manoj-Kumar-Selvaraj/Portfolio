@@ -2,6 +2,13 @@
 set -euxo pipefail
 set -x
 
+echo "[FORCE FLAGS]"
+echo "FORCE=$FORCE"
+echo "FORCE_NGINX=$FORCE_NGINX"
+echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
+echo "FORCE_AGENT=$FORCE_AGENT"
+echo "===================="
+
 echo "Starting Jenkins on-demand installation"
 chmod +x ./scripts/*.sh
 ./scripts/setup-jenkins-agent.sh
@@ -15,5 +22,7 @@ else
   echo "Jenkins credentials not ready. Skipping trigger."
 fi
 ./scripts/install-idle-shutdown-service.sh
+
+unset FORCE FORCE_NGINX FORCE_CONTROLLER FORCE_AGENT
 
 echo "Installation completed successfully"
