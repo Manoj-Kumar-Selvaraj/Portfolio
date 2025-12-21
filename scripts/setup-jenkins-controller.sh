@@ -10,15 +10,33 @@ JENKINS_CONTAINER="jenkins-controller"
 JENKINS_IMAGE="jenkins/jenkins:lts"
 JENKINS_PORT=8080
 
+# Normalize FORCE environment variable (accept true/1/yes)
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_CONTROLLER takes precedence; otherwise fall back to FORCE
+RAW_FORCE_CONTROLLER="${FORCE_CONTROLLER:-}"
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_CONTROLLER" ]; then
+  RAW_FORCE_CONTROLLER="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_CONTROLLER")" in
+  1|true|yes) FORCE_CONTROLLER=1 ;;
+  *) FORCE_CONTROLLER=0 ;;
+esac
+export FORCE_CONTROLLER
+
 echo "Preparing Jenkins home..."
-# If Jenkins controller container is already running and responding, skip installation
+# If Jenkins controller container is already running and responding, skip installation (unless FORCE)
 if docker ps --filter "name=$JENKINS_CONTAINER" --filter "status=running" --format '{{.Names}}' | grep -q "^${JENKINS_CONTAINER}$" 2>/dev/null; then
   echo "Detected running container ${JENKINS_CONTAINER}. Verifying responsiveness..."
-  if curl -sf "http://127.0.0.1:${JENKINS_PORT}/login" >/dev/null 2>&1; then
-    echo "Jenkins HTTP endpoint responding. Skipping controller setup."
-    exit 0
+  if [ "${FORCE_CONTROLLER:-0}" -eq 1 ]; then
+    echo "FORCE_CONTROLLER set; forcing controller setup despite a running container"
+  else
+    if curl -sf "http://127.0.0.1:${JENKINS_PORT}/login" >/dev/null 2>&1; then
+      echo "Jenkins HTTP endpoint responding. Skipping controller setup."
+      exit 0
+    fi
+    echo "Running container found but Jenkins not yet ready; continuing setup to ensure configuration."
   fi
-  echo "Running container found but Jenkins not yet ready; continuing setup to ensure configuration."
 fi
 sudo mkdir -p "$JENKINS_HOME"
 sudo chown -R 1000:1000 "$JENKINS_HOME"

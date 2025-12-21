@@ -52,6 +52,19 @@ fi
 sudo systemctl enable docker
 sudo systemctl start docker
 
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_AGENT takes precedence; otherwise fall back to FORCE
+RAW_FORCE_AGENT="${FORCE_AGENT:-}"
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_AGENT" ]; then
+  RAW_FORCE_AGENT="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_AGENT")" in
+  1|true|yes) FORCE_AGENT=1 ;;
+  *) FORCE_AGENT=0 ;;
+esac
+export FORCE_AGENT
+
 # -------------------------
 # 3. Allow Jenkins user to run Docker
 # -------------------------

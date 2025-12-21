@@ -6,9 +6,25 @@ on:
       - Azure-Scripts
   workflow_dispatch:   # 👈 Enables manual trigger
     inputs:
-    reason:
-      description: "Reason for manual run"
-      required: false
+      reason:
+        description: "Reason for manual run"
+        required: false
+      force:
+        description: "Global force flag (true/false). Falls back if per-component flags unset."
+        required: false
+        default: 'false'
+      force_nginx:
+        description: "Force Nginx reconfiguration (true/false)."
+        required: false
+        default: ''
+      force_controller:
+        description: "Force Jenkins controller reconfiguration (true/false)."
+        required: false
+        default: ''
+      force_agent:
+        description: "Force Jenkins agent reconfiguration (true/false)."
+        required: false
+        default: ''
 
 jobs:
   deploy:
@@ -45,8 +61,35 @@ jobs:
             export AZURE_KV_NAME="${{ secrets.AZURE_KV_NAME }}"
             export KV_SECRET_NAME="${{ secrets.KV_SECRET_NAME }}"
 
+            # Normalize global FORCE input from workflow_dispatch into FORCE=0/1
+            FORCE_INPUT='${{ github.event.inputs.force }}'
+            if [ -z "$FORCE_INPUT" ]; then FORCE_INPUT='false'; fi
+            case "$(echo "$FORCE_INPUT" | tr '[:upper:]' '[:lower:]')" in
+              1|true|yes) FORCE=1 ;;
+              *) FORCE=0 ;;
+            esac
+            export FORCE
+
+            # Normalize per-component FORCE inputs (empty => inherit global)
+            normalize_flag() {
+              local raw="$1"; local default="$2"
+              if [ -z "$raw" ]; then
+                echo "$default"
+                return
+              fi
+              case "$(echo "$raw" | tr '[:upper:]' '[:lower:]')" in
+                1|true|yes) echo 1 ;;
+                *) echo 0 ;;
+              esac
+            }
+
+            FORCE_NGINX=$(normalize_flag '${{ github.event.inputs.force_nginx }}' "$FORCE")
+            FORCE_CONTROLLER=$(normalize_flag '${{ github.event.inputs.force_controller }}' "$FORCE")
+            FORCE_AGENT=$(normalize_flag '${{ github.event.inputs.force_agent }}' "$FORCE")
+            export FORCE_NGINX FORCE_CONTROLLER FORCE_AGENT
+
             echo "==> Running install.sh"
-            sudo AZURE_KV_NAME="$AZURE_KV_NAME" KV_SECRET_NAME="$KV_SECRET_NAME" bash /opt/jenkins-install/scripts/install.sh
+            sudo FORCE="$FORCE" FORCE_NGINX="$FORCE_NGINX" FORCE_CONTROLLER="$FORCE_CONTROLLER" FORCE_AGENT="$FORCE_AGENT" AZURE_KV_NAME="$AZURE_KV_NAME" KV_SECRET_NAME="$KV_SECRET_NAME" bash /opt/jenkins-install/scripts/install.sh
 
             echo "==> Ensuring Jenkins nginx access log exists"
             sudo mkdir -p /var/log/nginx

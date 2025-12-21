@@ -9,17 +9,35 @@ DOMAIN="jenkins.manoj-tech-solutions.site"
 EMAIL="ss.mano1998@gmail.com"
 JENKINS_PORT=8080
 
-# If Nginx site already exists and certificate is present, skip setup
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_NGINX takes precedence; otherwise fall back to FORCE
+RAW_FORCE_NGINX="${FORCE_NGINX:-}" 
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_NGINX" ]; then
+  RAW_FORCE_NGINX="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_NGINX")" in
+  1|true|yes) FORCE_NGINX=1 ;;
+  *) FORCE_NGINX=0 ;;
+esac
+export FORCE_NGINX
+
+# If Nginx site already exists and certificate is present, skip setup (unless FORCE)
+# If Nginx site already exists and certificate is present, skip setup (unless FORCE_NGINX)
 if [[ -f "/etc/nginx/sites-available/jenkins" ]]; then
-  if nginx -t >/dev/null 2>&1; then
-    if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
-      echo "Detected existing Nginx site and certificate for ${DOMAIN}. Skipping Nginx setup."
-      exit 0
-    else
-      echo "Nginx site exists but certificate for ${DOMAIN} not found — continuing to request certificate."
-    fi
+  if [ "${FORCE_NGINX:-0}" -eq 1 ]; then
+    echo "FORCE_NGINX set; forcing Nginx reconfiguration"
   else
-    echo "Nginx configuration present but invalid; continuing to reconfigure site."
+    if nginx -t >/dev/null 2>&1; then
+      if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
+        echo "Detected existing Nginx site and certificate for ${DOMAIN}. Skipping Nginx setup."
+        exit 0
+      else
+        echo "Nginx site exists but certificate for ${DOMAIN} not found — continuing to request certificate."
+      fi
+    else
+      echo "Nginx configuration present but invalid; continuing to reconfigure site."
+    fi
   fi
 fi
 
