@@ -33,7 +33,7 @@ jobs:
 
     steps:
       # ------------------------------------------------------------
-      # STEP 1: Checkout
+      # STEP 1: Checkout (needed for commit message parsing)
       # ------------------------------------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
           fetch-depth: 1
 
       # ------------------------------------------------------------
-      # STEP 2: Resolve FORCE flags
+      # STEP 2: Resolve FORCE flags (runner-side)
       # ------------------------------------------------------------
       - name: Resolve force flags
         shell: bash
@@ -62,6 +62,7 @@ jobs:
 
           if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
             commit_msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
+
             [[ "$commit_msg" =~ \[force\] ]] && FORCE=1
             [[ "$commit_msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
             [[ "$commit_msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
@@ -73,6 +74,7 @@ jobs:
             FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
           fi
 
+          # Inherit from global FORCE
           [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
           [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
@@ -83,7 +85,7 @@ jobs:
           echo "FORCE_AGENT=$FORCE_AGENT" >> "$GITHUB_ENV"
 
       # ------------------------------------------------------------
-      # STEP 3: Deploy to VM
+      # STEP 3: Deploy to VM (authoritative execution)
       # ------------------------------------------------------------
       - name: Deploy Jenkins scripts to VM
         uses: appleboy/ssh-action@v1.0.3
@@ -102,10 +104,18 @@ jobs:
           script: |
             set -euxo pipefail
 
+            # ----------- Defensive defaults (set -u safe) -----------
             FORCE="${FORCE:-0}"
             FORCE_NGINX="${FORCE_NGINX:-0}"
             FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
             FORCE_AGENT="${FORCE_AGENT:-0}"
+            AZURE_KV_NAME="${AZURE_KV_NAME:-}"
+            KV_SECRET_NAME="${KV_SECRET_NAME:-}"
+
+            if [[ -z "$AZURE_KV_NAME" || -z "$KV_SECRET_NAME" ]]; then
+              echo "ERROR: Azure Key Vault variables are missing"
+              exit 1
+            fi
 
             echo "==> Flags"
             echo "FORCE=$FORCE"
@@ -114,7 +124,7 @@ jobs:
             echo "FORCE_AGENT=$FORCE_AGENT"
 
             sudo systemctl stop jenkins-idle-shutdown || true
-            sudo rm -rff /opt/jenkins-install
+            sudo rm -rf /opt/jenkins-install
 
             sudo git clone -b Azure-Scripts \
               https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
@@ -128,7 +138,7 @@ jobs:
             sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
             sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
 
-            sudo \
+            sudo env \
               FORCE="$FORCE" \
               FORCE_NGINX="$FORCE_NGINX" \
               FORCE_CONTROLLER="$FORCE_CONTROLLER" \
@@ -144,4 +154,4 @@ jobs:
             sudo systemctl status jenkins-idle-shutdown --no-pager || true
             sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
 
-            echo "==> Deployment completed"
+            echo "==> Deployment completed successfully"
