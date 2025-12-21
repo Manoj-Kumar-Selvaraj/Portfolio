@@ -19,20 +19,25 @@ on:
         description: "Force agent"
         default: "false"
 
+# 🔴 REQUIRED FOR OIDC
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
       # -----------------------------------------
-      # Checkout (only to read commit message)
+      # Checkout (for commit message parsing)
       # -----------------------------------------
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
       # -----------------------------------------
-      # Resolve FORCE flags (runner-side)
+      # Resolve FORCE flags
       # -----------------------------------------
       - name: Resolve force flags
         shell: bash
@@ -65,7 +70,6 @@ jobs:
           echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> $GITHUB_ENV
           echo "FORCE_AGENT=$FORCE_AGENT" >> $GITHUB_ENV
 
-
       # -----------------------------------------
       # Azure Login (OIDC – no secrets)
       # -----------------------------------------
@@ -77,7 +81,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # -----------------------------------------
-      # Run Command (THIS REPLACES SSH)
+      # Run Jenkins install via Azure Run Command
       # -----------------------------------------
       - name: Run Jenkins install via Azure Run Command
         run: |
@@ -92,4 +96,4 @@ jobs:
               FORCE_AGENT=${FORCE_AGENT} \
               AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
               KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
-            --scripts @install.sh
+            --scripts @scripts/install.sh
