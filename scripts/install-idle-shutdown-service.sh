@@ -10,6 +10,8 @@ WATCHER_SCRIPT="/opt/jenkins-install/scripts/idle-shutdown.sh"
 VM_RG="portfolio-rg"
 VM_NAME="jenkins-vm"
 IDLE_MINUTES="30"
+# Optional: path to access log (can be nginx access log)
+ACCESS_LOG="/var/log/jenkins/jenkins.log"
 # --------------------------------
 
 echo "==> Stopping existing service..."
@@ -33,6 +35,16 @@ fi
 
 chmod +x "${WATCHER_SCRIPT}"
 
+[ -d /etc/default ] || sudo mkdir -p /etc/default
+echo "==> Writing environment file /etc/default/jenkins-idle-shutdown"
+cat <<EENV > /etc/default/jenkins-idle-shutdown
+# Environment for Jenkins idle shutdown watcher
+VM_RG=${VM_RG}
+VM_NAME=${VM_NAME}
+IDLE_MINUTES=${IDLE_MINUTES}
+ACCESS_LOG=${ACCESS_LOG}
+EENV
+
 echo "==> Writing systemd unit..."
 cat <<EOF > "${SERVICE_PATH}"
 [Unit]
@@ -42,15 +54,13 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=${WATCHER_SCRIPT}
+ExecStart=/bin/bash -euxo pipefail ${WATCHER_SCRIPT}
+EnvironmentFile=/etc/default/jenkins-idle-shutdown
 Restart=always
 RestartSec=15
 User=root
 WorkingDirectory=/opt/jenkins-install/scripts
 
-Environment=VM_RG=${VM_RG}
-Environment=VM_NAME=${VM_NAME}
-Environment=IDLE_MINUTES=${IDLE_MINUTES}
 
 [Install]
 WantedBy=multi-user.target

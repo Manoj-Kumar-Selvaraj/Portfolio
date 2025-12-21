@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euxo pipefail
+# Force C locale for predictable date parsing
+export LC_ALL=C
 echo "Starting Jenkins idle shutdown script"
 # ----------------------------
 # Configuration (from systemd)
@@ -7,6 +9,12 @@ echo "Starting Jenkins idle shutdown script"
 JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
 IDLE_MINUTES="${IDLE_MINUTES:-30}"
 CHECK_INTERVAL=15
+
+# Allow configuration via /etc/default/jenkins-idle-shutdown (written by installer)
+if [[ -f "/etc/default/jenkins-idle-shutdown" ]]; then
+  # shellcheck source=/dev/null
+  source /etc/default/jenkins-idle-shutdown
+fi
 
 VM_RG="${VM_RG:?VM_RG is required}"
 VM_NAME="${VM_NAME:?VM_NAME is required}"
@@ -23,8 +31,18 @@ now_ms() {
   # Use seconds and nanoseconds (GNU date) and convert to milliseconds
   sec=$(date +%s)
   nsec=$(date +%N)
-  printf '%s%03d' "$sec" "$((nsec / 1000000))"
+  # Force base-10 interpretation of $nsec to avoid errors when it has leading zeros
+  ms=$(((10#$nsec) / 1000000))
+  printf '%s%03d' "$sec" "$ms"
 }
+
+# Trap signals for graceful shutdown
+graceful_shutdown=0
+on_term() {
+  log "Received termination signal, exiting gracefully"
+  graceful_shutdown=1
+}
+trap on_term SIGINT SIGTERM
 
 wait_for_jenkins() {
   until curl -sf "${JENKINS_URL}/login" >/dev/null; do
@@ -47,12 +65,16 @@ log "Starting Jenkins idle shutdown watcher"
 wait_for_jenkins
 log "Jenkins is reachable"
 
-# Path to Jenkins or proxy access log
-ACCESS_LOG="/var/log/jenkins/jenkins.log"  # Change if using nginx/apache
+# Path to Jenkins or proxy access log (can be overridden via env or /etc/default)
+ACCESS_LOG="${ACCESS_LOG:-/var/log/jenkins/jenkins.log}"  # Change if using nginx/apache
 # How many minutes to consider as 'recent access'
 PORTAL_IDLE_MINUTES=15
 
 while true; do
+  if [[ "$graceful_shutdown" -eq 1 ]]; then
+    log "Exiting main loop due to signal"
+    break
+  fi
   busy="$(curl -sf "${JENKINS_URL}/api/json" | jq -r '.busyExecutors // 0' || echo 0)"
   queue_len="$(curl -sf "${JENKINS_URL}/queue/api/json" | jq '.items | length' || echo 0)"
 
