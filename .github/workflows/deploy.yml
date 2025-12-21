@@ -96,5 +96,5 @@ jobs:
               FORCE_AGENT=${FORCE_AGENT} \
               AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
               KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
-            --scripts @scripts/install.sh
+            --scripts @install.sh
 
