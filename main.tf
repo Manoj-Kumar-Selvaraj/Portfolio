@@ -268,3 +268,55 @@ resource "azurerm_key_vault_secret" "jenkins_token" {
     azurerm_role_assignment.tf_kv_secrets_officer
   ]
 }
+
+############################################
+# Azure AD Application (GitHub OIDC)
+############################################
+
+resource "azuread_application" "github_oidc" {
+  display_name = "${local.prefix}-github-oidc"
+
+  tags = [
+    "github-actions",
+    "terraform",
+    "oidc"
+  ]
+}
+
+############################################
+# Service Principal
+############################################
+
+resource "azuread_service_principal" "github_oidc" {
+  application_id = azuread_application.github_oidc.application_id
+}
+
+############################################
+# GitHub OIDC Federated Credential
+############################################
+
+resource "azuread_application_federated_identity_credential" "github_oidc" {
+  application_object_id = azuread_application.github_oidc.object_id
+  display_name          = "github-actions-oidc"
+  description           = "OIDC for GitHub Actions"
+  audiences             = ["api://AzureADTokenExchange"]
+  issuer                = "https://token.actions.githubusercontent.com"
+
+  subject = "repo:Manoj-Kumar-Selvaraj/Portfolio:ref:refs/heads/Azure-Scripts"
+}
+
+############################################
+# RBAC — GitHub OIDC → Key Vault (Read)
+############################################
+
+resource "azurerm_role_assignment" "github_kv_secrets_reader" {
+  scope                = azurerm_key_vault.kv.id
+  role_definition_name = "Key Vault Secrets User"
+  principal_id         = azuread_service_principal.github_oidc.object_id
+}
+
+resource "azurerm_role_assignment" "github_rg_reader" {
+  scope                = azurerm_resource_group.rg.id
+  role_definition_name = "Reader"
+  principal_id         = azuread_service_principal.github_oidc.object_id
+}
