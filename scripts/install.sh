@@ -8,6 +8,7 @@ chmod +x ./scripts/*.sh
 ./scripts/setup-jenkins-controller.sh
 ./scripts/install-idle-shutdown-service.sh
 ./scripts/setup-nginx-jenkins.sh
+./scripts/az.sh
 ./scripts/trigger_job_local.sh "initial-setup"
 ./scripts/install-idle-shutdown-service.sh
 

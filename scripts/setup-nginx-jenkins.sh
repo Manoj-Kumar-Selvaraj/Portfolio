@@ -9,6 +9,20 @@ DOMAIN="jenkins.manoj-tech-solutions.site"
 EMAIL="ss.mano1998@gmail.com"
 JENKINS_PORT=8080
 
+# If Nginx site already exists and certificate is present, skip setup
+if [[ -f "/etc/nginx/sites-available/jenkins" ]]; then
+  if nginx -t >/dev/null 2>&1; then
+    if [[ -f "/etc/letsencrypt/live/${DOMAIN}/fullchain.pem" ]]; then
+      echo "Detected existing Nginx site and certificate for ${DOMAIN}. Skipping Nginx setup."
+      exit 0
+    else
+      echo "Nginx site exists but certificate for ${DOMAIN} not found — continuing to request certificate."
+    fi
+  else
+    echo "Nginx configuration present but invalid; continuing to reconfigure site."
+  fi
+fi
+
 # -------------------------
 # 0. Wait for OS readiness
 # -------------------------
