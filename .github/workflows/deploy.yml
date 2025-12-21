@@ -86,15 +86,12 @@ jobs:
       - name: Run Jenkins install via Azure Run Command
         run: |
           az vm run-command invoke \
-            --resource-group portfolio-rg \
-            --name jenkins-vm \
             --command-id RunShellScript \
-            --parameters \
-              FORCE=${FORCE} \
-              FORCE_NGINX=${FORCE_NGINX} \
-              FORCE_CONTROLLER=${FORCE_CONTROLLER} \
-              FORCE_AGENT=${FORCE_AGENT} \
-              AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
-              KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
-            --scripts @install.sh
+            --scripts "
+              cd /opt/jenkins-install && \
+              sudo FORCE=$FORCE FORCE_NGINX=$FORCE_NGINX \
+              FORCE_CONTROLLER=$FORCE_CONTROLLER FORCE_AGENT=$FORCE_AGENT \
+              AZURE_KV_NAME=$AZURE_KV_NAME KV_SECRET_NAME=$KV_SECRET_NAME \
+              bash scripts/install.sh
+            "
 
