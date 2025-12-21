@@ -5,6 +5,10 @@ on:
     branches:
       - Azure-Scripts
   workflow_dispatch:   # 👈 Enables manual trigger
+    inputs:
+    reason:
+      description: "Reason for manual run"
+      required: false
 
 jobs:
   deploy:
