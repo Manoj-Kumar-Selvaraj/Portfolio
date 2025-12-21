@@ -4,7 +4,6 @@ set -euo pipefail
 echo "Starting Jenkins on-demand installation"
 
 
-./scripts/docker.sh
 ./scripts/setup-docker-compose-harbour.sh
 ./scripts/jenkins.sh
 ./scripts/install-idle-shutdown-service.sh
