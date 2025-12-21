@@ -48,4 +48,21 @@ jobs:
             echo "==> Running install.sh"
             sudo AZURE_KV_NAME="$AZURE_KV_NAME" KV_SECRET_NAME="$KV_SECRET_NAME" bash /opt/jenkins-install/scripts/install.sh
 
+            echo "==> Ensuring Jenkins nginx access log exists"
+            sudo mkdir -p /var/log/nginx
+            sudo touch /var/log/nginx/jenkins.access.log
+            sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
+            sudo chmod 0640 /var/log/nginx/jenkins.access.log || true
+
+            echo "==> Reloading systemd and enabling service"
+            sudo systemctl daemon-reload
+            sudo systemctl enable --now jenkins-idle-shutdown.service
+
+            echo "==> Restarting nginx"
+            sudo systemctl restart nginx || true
+
+            echo "==> Service status and recent logs for verification"
+            sudo systemctl status jenkins-idle-shutdown --no-pager || true
+            sudo journalctl -u jenkins-idle-shutdown --no-pager -n 200 || true
+
             echo "==> Deployment completed successfully"

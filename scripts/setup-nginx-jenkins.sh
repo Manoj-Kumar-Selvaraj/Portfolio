@@ -45,6 +45,9 @@ server {
     listen 80;
     server_name ${DOMAIN};
 
+  # Dedicated access log for Jenkins site to allow precise idle detection
+  access_log /var/log/nginx/jenkins.access.log;
+
     location / {
         proxy_pass http://127.0.0.1:${JENKINS_PORT};
         proxy_http_version 1.1;
@@ -66,6 +69,10 @@ sudo rm -f /etc/nginx/sites-enabled/default
 echo "Testing Nginx configuration..."
 sudo nginx -t
 sudo systemctl reload nginx
+
+# Ensure dedicated Jenkins access log file exists and has correct ownership
+sudo touch /var/log/nginx/jenkins.access.log
+sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
 
 # -------------------------
 # 3. Firewall (optional)

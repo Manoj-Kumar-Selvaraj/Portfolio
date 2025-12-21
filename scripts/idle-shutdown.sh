@@ -7,7 +7,8 @@ echo "Starting Jenkins idle shutdown script"
 # Configuration (from systemd)
 # ----------------------------
 JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
-IDLE_MINUTES="${IDLE_MINUTES:-30}"
+# Default idle threshold (minutes) — portal access only
+IDLE_MINUTES="${IDLE_MINUTES:-3}"
 CHECK_INTERVAL=15
 
 # Allow configuration via /etc/default/jenkins-idle-shutdown (written by installer)
@@ -21,6 +22,9 @@ VM_NAME="${VM_NAME:?VM_NAME is required}"
 
 IDLE_MS=$((IDLE_MINUTES * 60 * 1000))
 DEALLOCATED_FLAG="/var/run/jenkins_vm_deallocated"
+
+# Jenkins home (used to read file timestamps if running in container)
+JENKINS_HOME="${JENKINS_HOME:-/var/jenkins_home}"
 
 log() {
   echo "[idle-shutdown] $(date -u '+%Y-%m-%dT%H:%M:%SZ') $*"
@@ -58,62 +62,77 @@ get_last_completed_ms() {
 }
 
 
+# Return last access time from ACCESS_LOG in milliseconds, or 0
+get_last_access_ms() {
+  if [[ ! -f "${ACCESS_LOG}" ]]; then
+    echo 0
+    return
+  fi
+
+  awk -v OFS="" '
+    { if (match($0, /\[([0-9]{2}\/[^\/]+\/[0-9]{4}:[0-9]{2}:[0-9]{2}:[0-9]{2})/, a)) {
+        cmd = "date -d \"" a[1] "\" +%s";
+        cmd | getline t; close(cmd);
+        if (t > max) max = t
+      }
+    }
+    END { if (max) print max * 1000; else print 0 }
+  ' "${ACCESS_LOG}" || echo 0
+}
+
+# Return mtime of a key jenkins file (initialAdminPassword) in milliseconds, or 0
+get_jenkins_file_ms() {
+  local f="${JENKINS_HOME}/secrets/initialAdminPassword"
+  if [[ -f "$f" ]]; then
+    # stat -c %Y gives seconds since epoch
+    sec=$(stat -c %Y "$f" 2>/dev/null || echo 0)
+    if [[ "$sec" -ne 0 ]]; then
+      echo $((sec * 1000))
+      return
+    fi
+  fi
+  echo 0
+}
+
+
 # ----------------------------
-# Main loop
+# Main loop (portal-access-only policy)
 # ----------------------------
-log "Starting Jenkins idle shutdown watcher"
+log "Starting Jenkins idle shutdown watcher (portal-access-only, ${IDLE_MINUTES} minute threshold)"
 wait_for_jenkins
 log "Jenkins is reachable"
 
 # Path to Jenkins or proxy access log (can be overridden via env or /etc/default)
-ACCESS_LOG="${ACCESS_LOG:-/var/log/jenkins/jenkins.log}"  # Change if using nginx/apache
-# How many minutes to consider as 'recent access'
-PORTAL_IDLE_MINUTES=15
+# Default to the dedicated Jenkins nginx access log (created by setup script)
+ACCESS_LOG="${ACCESS_LOG:-/var/log/nginx/jenkins.access.log}"
+
+# Track when the watcher started so we can deallocate if no access ever occurs
+start_ms=$(now_ms)
 
 while true; do
   if [[ "$graceful_shutdown" -eq 1 ]]; then
     log "Exiting main loop due to signal"
     break
   fi
-  busy="$(curl -sf "${JENKINS_URL}/api/json" | jq -r '.busyExecutors // 0' || echo 0)"
-  queue_len="$(curl -sf "${JENKINS_URL}/queue/api/json" | jq '.items | length' || echo 0)"
 
-  log "busyExecutors=${busy}, queueLength=${queue_len}"
+  # Check most recent access time
+  access_ms="$(get_last_access_ms)"
+  now="$(now_ms)"
 
-  # Check for recent portal access
-  recent_access=0
-  if [[ -f "${ACCESS_LOG}" ]]; then
-    # Get timestamp for N minutes ago
-    since_epoch=$(date --date="-${PORTAL_IDLE_MINUTES} minutes" +%s)
-    # Count log lines with access in the last N minutes
-    recent_access=$(awk -v since="$since_epoch" '{
-      match($0, /\[([0-9]{2}\/[A-Za-z]{3}\/[0-9]{4}:[0-9]{2}:[0-9]{2}:[0-9]{2})/, arr);
-      if (arr[1] != "") {
-        cmd = "date -d \"" arr[1] "\" +%s";
-        cmd | getline t;
-        close(cmd);
-        if (t >= since) { print $0; }
-      }
-    }' "$ACCESS_LOG" | wc -l)
+  if [[ "${access_ms}" -eq 0 ]]; then
+    # No access recorded yet — consider time since start
+    idle=$((now - start_ms))
+    log "No portal access recorded yet; idle since start: $((idle / 1000)) seconds"
+  else
+    idle=$((now - access_ms))
+    log "Idle since last portal access: $((idle / 1000)) seconds"
   fi
 
-  log "Recent portal access in last ${PORTAL_IDLE_MINUTES} min: ${recent_access}"
-
-  if [[ "${busy}" -eq 0 && "${queue_len}" -eq 0 && "${recent_access}" -eq 0 ]]; then
-    last_ms="$(get_last_completed_ms)"
-    now="$(now_ms)"
-
-    if [[ "${last_ms}" -ne 0 ]]; then
-      idle=$((now - last_ms))
-      log "Idle for $((idle / 1000)) seconds"
-
-      if [[ "${idle}" -ge "${IDLE_MS}" && ! -f "${DEALLOCATED_FLAG}" ]]; then
-        log "Idle threshold reached, deallocating VM"
-        az login --identity >/dev/null 2>&1 || true
-        az vm deallocate -g "${VM_RG}" -n "${VM_NAME}" --no-wait
-        touch "${DEALLOCATED_FLAG}"
-      fi
-    fi
+  if [[ "${idle}" -ge "${IDLE_MS}" && ! -f "${DEALLOCATED_FLAG}" ]]; then
+    log "Portal idle threshold reached (${IDLE_MINUTES} minutes), deallocating VM"
+    az login --identity >/dev/null 2>&1 || true
+    az vm deallocate -g "${VM_RG}" -n "${VM_NAME}" --no-wait
+    touch "${DEALLOCATED_FLAG}"
   fi
 
   sleep "${CHECK_INTERVAL}"
