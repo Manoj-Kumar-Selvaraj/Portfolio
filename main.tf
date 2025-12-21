@@ -83,8 +83,8 @@ resource "azurerm_network_security_group" "nsg" {
     destination_port_range     = "8080"
   }
 
-    security_rule {
-    name                       = "Allow-SSL-Validation"
+  security_rule {
+    name                       = "Allow-HTTP"
     priority                   = 1003
     direction                  = "Inbound"
     access                     = "Allow"
@@ -95,8 +95,8 @@ resource "azurerm_network_security_group" "nsg" {
     destination_port_range     = "80"
   }
 
-      security_rule {
-    name                       = "Enabling-HTTPS"
+  security_rule {
+    name                       = "Allow-HTTPS"
     priority                   = 1004
     direction                  = "Inbound"
     access                     = "Allow"
@@ -140,18 +140,17 @@ resource "azurerm_network_interface_security_group_association" "nsg_assoc" {
 }
 
 ############################################
-# Key Vault (RBAC ONLY – no access policies)
+# Key Vault (RBAC only)
 ############################################
 
 resource "azurerm_key_vault" "kv" {
-  name                        = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
-  location                    = azurerm_resource_group.rg.location
-  resource_group_name         = azurerm_resource_group.rg.name
-  tenant_id                   = data.azurerm_client_config.current.tenant_id
-  sku_name                    = "standard"
-  rbac_authorization_enabled  = true
-
-  tags = local.common_tags
+  name                       = var.key_vault_name != "" ? var.key_vault_name : "${local.prefix}-kv"
+  location                   = azurerm_resource_group.rg.location
+  resource_group_name        = azurerm_resource_group.rg.name
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  sku_name                   = "standard"
+  rbac_authorization_enabled = true
+  tags                       = local.common_tags
 }
 
 ############################################
@@ -165,16 +164,6 @@ resource "azurerm_role_assignment" "tf_kv_secrets_officer" {
 }
 
 ############################################
-# Cloud-init hash trigger
-############################################
-
-resource "null_resource" "cloudinit_hash" {
-  triggers = {
-    sha = sha256(local.cloudinit_content)
-  }
-}
-
-############################################
 # Jenkins VM
 ############################################
 
@@ -185,28 +174,24 @@ resource "azurerm_linux_virtual_machine" "jenkins" {
   size                = var.vm_size
   admin_username      = var.admin_username
 
-  network_interface_ids = [
-    azurerm_network_interface.nic.id
-  ]
+  network_interface_ids = [azurerm_network_interface.nic.id]
 
   admin_ssh_key {
     username   = var.admin_username
     public_key = var.ssh_pub_key
   }
 
-
   os_disk {
     caching              = "ReadWrite"
     storage_account_type = "StandardSSD_LRS"
   }
 
-source_image_reference {
-  publisher = "Canonical"
-  offer     = "0001-com-ubuntu-server-jammy"
-  sku       = "22_04-lts-gen2"
-  version   = "latest"
-}
-
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts-gen2"
+    version   = "latest"
+  }
 
   identity {
     type = "SystemAssigned"
@@ -214,36 +199,8 @@ source_image_reference {
 
   custom_data = base64encode(local.cloudinit_content)
 
-  lifecycle {
-    replace_triggered_by = [
-      null_resource.cloudinit_hash
-    ]
-  }
-
   tags = local.common_tags
 }
-
-resource "null_resource" "cloudinit_logs" {
-  depends_on = [azurerm_linux_virtual_machine.jenkins]
-
-  connection {
-    type        = "ssh"
-    user        = var.admin_username
-    private_key = var.ssh_pri_key
-    host        = azurerm_public_ip.pip.ip_address
-    timeout     = "10m"
-  }
-
-  provisioner "remote-exec" {
-    inline = [
-      "echo '==== cloud-init status ===='",
-      "cloud-init status || true",
-      "echo '==== cloud-init-output.log ===='",
-      "sudo tail -n 200 /var/log/cloud-init-output.log || true"
-    ]
-  }
-}
-
 
 ############################################
 # RBAC — Jenkins VM Managed Identity (read secrets)
@@ -263,10 +220,7 @@ resource "azurerm_key_vault_secret" "jenkins_token" {
   name         = var.vault_secret_name
   value        = "PLACEHOLDER_REPLACE_AFTER_JENKINS_SETUP"
   key_vault_id = azurerm_key_vault.kv.id
-
-  depends_on = [
-    azurerm_role_assignment.tf_kv_secrets_officer
-  ]
+  depends_on   = [azurerm_role_assignment.tf_kv_secrets_officer]
 }
 
 ############################################
@@ -275,38 +229,32 @@ resource "azurerm_key_vault_secret" "jenkins_token" {
 
 resource "azuread_application" "github_oidc" {
   display_name = "${local.prefix}-github-oidc"
-
-  tags = [
-    "github-actions",
-    "terraform",
-    "oidc"
-  ]
 }
 
 ############################################
-# Service Principal
+# Service Principal (FIXED)
 ############################################
 
 resource "azuread_service_principal" "github_oidc" {
-  application_id = azuread_application.github_oidc.application_id
+  client_id = azuread_application.github_oidc.client_id
 }
 
 ############################################
-# GitHub OIDC Federated Credential
+# GitHub OIDC Federated Credential (FIXED)
 ############################################
 
 resource "azuread_application_federated_identity_credential" "github_oidc" {
-  application_object_id = azuread_application.github_oidc.object_id
-  display_name          = "github-actions-oidc"
-  description           = "OIDC for GitHub Actions"
-  audiences             = ["api://AzureADTokenExchange"]
-  issuer                = "https://token.actions.githubusercontent.com"
+  application_id = azuread_application.github_oidc.id
 
-  subject = "repo:Manoj-Kumar-Selvaraj/Portfolio:ref:refs/heads/Azure-Scripts"
+  display_name = "github-actions-oidc"
+  description  = "OIDC for GitHub Actions"
+  audiences    = ["api://AzureADTokenExchange"]
+  issuer       = "https://token.actions.githubusercontent.com"
+  subject      = "repo:Manoj-Kumar-Selvaraj/Portfolio:ref:refs/heads/Azure-Scripts"
 }
 
 ############################################
-# RBAC — GitHub OIDC → Key Vault (Read)
+# RBAC — GitHub OIDC → Key Vault + RG
 ############################################
 
 resource "azurerm_role_assignment" "github_kv_secrets_reader" {

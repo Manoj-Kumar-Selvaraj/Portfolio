@@ -17,9 +17,8 @@ output "key_vault_name" {
 ############################################
 # Outputs for GitHub Actions
 ############################################
-
 output "github_client_id" {
-  value = azuread_application.github_oidc.application_id
+  value = azuread_application.github_oidc.client_id
 }
 
 output "github_tenant_id" {
@@ -29,4 +28,3 @@ output "github_tenant_id" {
 output "github_subscription_id" {
   value = data.azurerm_client_config.current.subscription_id
 }
-
