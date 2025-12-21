@@ -19,9 +19,8 @@ on:
         description: "Force agent"
         default: "false"
 
-# 🔴 REQUIRED FOR OIDC
 permissions:
-  id-token: write
+  id-token: write      # REQUIRED for Azure OIDC
   contents: read
 
 jobs:
@@ -29,27 +28,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # -----------------------------------------
-      # Checkout (for commit message parsing)
-      # -----------------------------------------
-      - uses: actions/checkout@v4
+      # --------------------------------------------------
+      # Checkout (only to read commit message)
+      # --------------------------------------------------
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      # -----------------------------------------
-      # Resolve FORCE flags
-      # -----------------------------------------
+      # --------------------------------------------------
+      # Resolve FORCE flags (runner-side)
+      # --------------------------------------------------
       - name: Resolve force flags
         shell: bash
         run: |
+          set -euo pipefail
+
           normalize() {
             case "${1,,}" in true|1|yes) echo 1 ;; *) echo 0 ;; esac
           }
 
-          FORCE=0 FORCE_NGINX=0 FORCE_CONTROLLER=0 FORCE_AGENT=0
+          FORCE=0
+          FORCE_NGINX=0
+          FORCE_CONTROLLER=0
+          FORCE_AGENT=0
 
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
+
             [[ "$msg" =~ \[force\] ]] && FORCE=1
             [[ "$msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
             [[ "$msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
@@ -65,14 +71,20 @@ jobs:
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
           [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
 
-          echo "FORCE=$FORCE" >> $GITHUB_ENV
-          echo "FORCE_NGINX=$FORCE_NGINX" >> $GITHUB_ENV
-          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> $GITHUB_ENV
-          echo "FORCE_AGENT=$FORCE_AGENT" >> $GITHUB_ENV
+          echo "FORCE=$FORCE" >> "$GITHUB_ENV"
+          echo "FORCE_NGINX=$FORCE_NGINX" >> "$GITHUB_ENV"
+          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER" >> "$GITHUB_ENV"
+          echo "FORCE_AGENT=$FORCE_AGENT" >> "$GITHUB_ENV"
 
-      # -----------------------------------------
+          echo "Resolved flags:"
+          echo "FORCE=$FORCE"
+          echo "FORCE_NGINX=$FORCE_NGINX"
+          echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
+          echo "FORCE_AGENT=$FORCE_AGENT"
+
+      # --------------------------------------------------
       # Azure Login (OIDC – no secrets)
-      # -----------------------------------------
+      # --------------------------------------------------
       - name: Azure Login
         uses: azure/login@v1
         with:
@@ -80,18 +92,88 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # -----------------------------------------
-      # Run Jenkins install via Azure Run Command
-      # -----------------------------------------
+      # --------------------------------------------------
+      # Azure Run Command (authoritative execution)
+      # --------------------------------------------------
       - name: Run Jenkins install via Azure Run Command
+        shell: bash
         run: |
           az vm run-command invoke \
+            --resource-group portfolio-rg \
+            --name jenkins-vm \
             --command-id RunShellScript \
-            --scripts "
-              cd /opt/jenkins-install && \
-              sudo FORCE=$FORCE FORCE_NGINX=$FORCE_NGINX \
-              FORCE_CONTROLLER=$FORCE_CONTROLLER FORCE_AGENT=$FORCE_AGENT \
-              AZURE_KV_NAME=$AZURE_KV_NAME KV_SECRET_NAME=$KV_SECRET_NAME \
-              bash scripts/install.sh
-            "
+            --scripts '
+              set -euxo pipefail
 
+              # -----------------------------
+              # Canonical runtime variables
+              # -----------------------------
+              VM_NAME="jenkins-vm"
+              RESOURCE_GROUP="portfolio-rg"
+              INSTALL_DIR="/opt/jenkins-install"
+              LOG_FILE="/var/log/jenkins-install.log"
+
+              FORCE="${FORCE:-0}"
+              FORCE_NGINX="${FORCE_NGINX:-0}"
+              FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
+              FORCE_AGENT="${FORCE_AGENT:-0}"
+
+              AZURE_KV_NAME="${AZURE_KV_NAME}"
+              KV_SECRET_NAME="${KV_SECRET_NAME}"
+
+              # -----------------------------
+              # Logging (persisted on VM)
+              # -----------------------------
+              mkdir -p /var/log
+              touch "$LOG_FILE"
+              exec > >(tee -a "$LOG_FILE") 2>&1
+
+              echo "========================================="
+              echo "Jenkins install started at $(date -u)"
+              echo "VM=$VM_NAME RG=$RESOURCE_GROUP"
+              echo "FORCE=$FORCE"
+              echo "FORCE_NGINX=$FORCE_NGINX"
+              echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
+              echo "FORCE_AGENT=$FORCE_AGENT"
+              echo "========================================="
+
+              # -----------------------------
+              # Sanity checks
+              # -----------------------------
+              if [[ -z "$AZURE_KV_NAME" || -z "$KV_SECRET_NAME" ]]; then
+                echo "ERROR: Azure Key Vault variables missing"
+                exit 1
+              fi
+
+              # -----------------------------
+              # Fresh repo clone (Run Command has no code)
+              # -----------------------------
+              rm -rf "$INSTALL_DIR"
+              git clone -b Azure-Scripts \
+                https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
+                "$INSTALL_DIR"
+
+              cd "$INSTALL_DIR"
+              chmod -R +x scripts
+
+              # -----------------------------
+              # Execute installer
+              # -----------------------------
+              env \
+                FORCE="$FORCE" \
+                FORCE_NGINX="$FORCE_NGINX" \
+                FORCE_CONTROLLER="$FORCE_CONTROLLER" \
+                FORCE_AGENT="$FORCE_AGENT" \
+                AZURE_KV_NAME="$AZURE_KV_NAME" \
+                KV_SECRET_NAME="$KV_SECRET_NAME" \
+                bash scripts/install.sh
+
+              echo "Jenkins install completed at $(date -u)"
+            ' \
+            --parameters \
+              FORCE=${{ env.FORCE }} \
+              FORCE_NGINX=${{ env.FORCE_NGINX }} \
+              FORCE_CONTROLLER=${{ env.FORCE_CONTROLLER }} \
+              FORCE_AGENT=${{ env.FORCE_AGENT }} \
+              AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
+              KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }}
