@@ -5,7 +5,7 @@ echo "========================================"
 echo " Setting up Nginx as Jenkins Reverse Proxy"
 echo "========================================"
 
-DOMAIN="jenkins.manoj-tech-solution.site"
+DOMAIN="jenkins.manoj-tech-solutions.site"
 EMAIL="ss.mano1998@gmail.com"
 JENKINS_PORT=8080
 
