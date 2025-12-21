@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - Azure-Scripts
+  workflow_dispatch:   # 👈 Enables manual trigger
 
 jobs:
   deploy:
@@ -34,6 +35,7 @@ jobs:
             echo "==> Ensuring install script is executable"
             sudo chmod -R +x /opt/jenkins-install/scripts/*
             cd /opt/jenkins-install
+
             echo "==> Running install.sh"
             sudo bash /opt/jenkins-install/scripts/install.sh
 
