@@ -83,6 +83,18 @@ resource "azurerm_network_security_group" "nsg" {
     destination_port_range     = "8080"
   }
 
+    security_rule {
+    name                       = "Allow-SSL-Validation"
+    priority                   = 1003
+    direction                  = "Inbound"
+    access                     = "Allow"
+    protocol                   = "Tcp"
+    source_address_prefix      = "Internet"
+    destination_address_prefix = "*"
+    source_port_range          = "*"
+    destination_port_range     = "80"
+  }
+
   tags = local.common_tags
 }
 
