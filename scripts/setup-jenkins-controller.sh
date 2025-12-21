@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
+set -euxo pipefail
+echo "Setting up Jenkins Controller..."
+echo "========================================"
 JENKINS_HOME="/var/jenkins_home"
 JENKINS_CONTAINER="jenkins-controller"
 JENKINS_IMAGE="jenkins/jenkins:lts"
@@ -33,3 +34,5 @@ echo "➡ Access: http://<VM_PUBLIC_IP>:8080"
 echo ""
 echo "Initial admin password:"
 sudo cat "$JENKINS_HOME/secrets/initialAdminPassword"
+
+echo "Please complete the Jenkins setup through the web interface."

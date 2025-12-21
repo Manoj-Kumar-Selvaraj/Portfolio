@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euxo pipefail
+set -x
+
 echo "Starting Jenkins on-demand installation"
 chmod +x ./scripts/*.sh
 ./scripts/setup-jenkins-agent.sh

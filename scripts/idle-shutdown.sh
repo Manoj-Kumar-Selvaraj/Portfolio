@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
+set -euxo pipefail
+echo "Starting Jenkins idle shutdown script"
 # ----------------------------
 # Configuration (from systemd)
 # ----------------------------
@@ -92,3 +92,5 @@ while true; do
 
   sleep "${CHECK_INTERVAL}"
 done
+
+echo "Exiting Jenkins idle shutdown script"

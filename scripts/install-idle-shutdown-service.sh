@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
+echo "Installing Jenkins idle shutdown service..."
 
 SERVICE_NAME="jenkins-idle-shutdown.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
@@ -64,3 +65,5 @@ systemctl enable --now "${SERVICE_NAME}"
 
 echo "==> Service installed successfully"
 systemctl status "${SERVICE_NAME}" --no-pager
+
+echo "✅ Jenkins idle shutdown service installation completed."

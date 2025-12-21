@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
+echo "Setting up Jenkins Agent and Harbor environment..."
 
 echo "========================================"
 echo " Jenkins Agent + Harbor Environment Setup"
@@ -101,4 +102,5 @@ echo "2. Configure this VM as a Jenkins agent"
 echo "3. Set environment variables in Jenkins:"
 echo "   OPENAI_API_KEY"
 echo "   OPENAI_BASE_URL=https://api.portkey.ai/v1"
-echo
+
+echo "✅ Jenkins Agent and Harbor environment setup completed."

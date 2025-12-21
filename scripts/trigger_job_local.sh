@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
+echo "Triggering Jenkins job locally..."
 
 JOB_NAME="${1:-deploy-site}"
 JENKINS_URL="http://localhost:8080"
@@ -18,3 +19,5 @@ curl -X POST \
   "${JENKINS_URL}/job/${JOB_NAME}/build?delay=0"
 
 echo "Triggered job: ${JOB_NAME}"
+
+echo "✅ Jenkins job triggered successfully."

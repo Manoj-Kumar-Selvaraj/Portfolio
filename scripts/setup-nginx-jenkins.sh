@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -euxo pipefail
+echo "Setting up Nginx as a reverse proxy for Jenkins..."
+echo "========================================"
 
 DOMAIN="jenkins.manoj-tech-solution.site"
 EMAIL="ss.mano1998@gmail.com"
@@ -48,3 +50,5 @@ sudo certbot --nginx \
   -m "${EMAIL}"
 
 echo "✅ Jenkins is now available at https://${DOMAIN}"
+
+echo "Nginx setup for Jenkins completed successfully."
