@@ -156,7 +156,7 @@ jobs:
               AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
               KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
             --scripts '
-              #!/usr/bin/env bash
+              bash -c "
               set -Eeuo pipefail
 
               VM_NAME="jenkins-vm"
@@ -199,4 +199,5 @@ jobs:
                 bash scripts/install.sh
 
               echo "Jenkins install completed at $(date -u)"
+              "
             '
