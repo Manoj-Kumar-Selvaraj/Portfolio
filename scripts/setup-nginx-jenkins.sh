@@ -89,8 +89,11 @@ sudo nginx -t
 sudo systemctl reload nginx
 
 # Ensure dedicated Jenkins access log file exists and has correct ownership
-sudo touch /var/log/nginx/jenkins.access.log
+if [[ ! -f /var/log/nginx/jenkins.access.log ]]; then
+  sudo touch /var/log/nginx/jenkins.access.log
+fi
 sudo chown www-data:adm /var/log/nginx/jenkins.access.log || true
+sudo chmod 664 /var/log/nginx/jenkins.access.log || true
 
 # -------------------------
 # 3. Firewall (optional)
