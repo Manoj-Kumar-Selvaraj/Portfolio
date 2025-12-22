@@ -168,12 +168,11 @@ jobs:
               FORCE_JENKINS_AGENT_SERVICE=$FORCE_JENKINS_AGENT_SERVICE \
               JENKINS_AGENT_SECRET=$JENKINS_AGENT_SECRET \
               JENKINS_AGENT_NAME=$JENKINS_AGENT_NAME \
-            --scripts '
-              set -Eeuo pipefail
-              INSTALL_DIR=/opt/jenkins-install
-              rm -rf "$INSTALL_DIR"
-              git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git "$INSTALL_DIR"
-              cd "$INSTALL_DIR"
-              chmod -R +x scripts
-              bash scripts/remote-install.sh
-            '
+            --scripts 'bash -lc "\
+              INSTALL_DIR=/opt/jenkins-install\
+              rm -rf \"$INSTALL_DIR\"\
+              git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \"$INSTALL_DIR\"\
+              cd \"$INSTALL_DIR\"\
+              chmod -R +x scripts\
+              bash scripts/remote-install.sh\
+            "'
