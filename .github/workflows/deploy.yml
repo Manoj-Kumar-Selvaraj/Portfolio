@@ -180,7 +180,8 @@ jobs:
                   mkdir -p /var/log
                   touch /var/log/jenkins-install.log
                   LOG_FILE="/var/log/jenkins-install.log"
-                  exec >>"$LOG_FILE" 2>&1
+                  exec >>"$LOG_FILE"
+                  exec 2>&1
 
                   echo \"=====================================\"
                   echo \"Jenkins install started at $(date -u)\"
