@@ -30,11 +30,7 @@ if [[ -z "$AZURE_KV_NAME" || -z "$KV_SECRET_NAME" ]]; then
   exit 1
 fi
 
-rm -rf "$INSTALL_DIR"
-git clone -b Azure-Scripts \
-  https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
-  "$INSTALL_DIR"
-
+# Repo is already cloned by the workflow, just ensure we're in the right directory
 cd "$INSTALL_DIR"
 chmod -R +x scripts
 
