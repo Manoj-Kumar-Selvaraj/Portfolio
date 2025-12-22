@@ -169,9 +169,15 @@ jobs:
               JENKINS_AGENT_SECRET=$JENKINS_AGENT_SECRET \
               JENKINS_AGENT_NAME=$JENKINS_AGENT_NAME \
             --scripts 'bash -lc "
+              set -euo pipefail
+              echo Start: Removing old install dir
               rm -rf /opt/jenkins-install
+              echo Cloning repo
               git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git /opt/jenkins-install
               cd /opt/jenkins-install
+              echo Making scripts executable
               chmod -R +x scripts
+              echo Running remote-install.sh
               bash scripts/remote-install.sh
+              echo Done
             "'
