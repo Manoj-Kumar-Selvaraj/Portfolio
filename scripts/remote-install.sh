@@ -12,7 +12,8 @@ if [[ -z "$LOG_FILE" ]]; then
 fi
 
 touch "$LOG_FILE"
-exec >>"$LOG_FILE"
+# Redirect to log file AND stdout so Azure Run Command can see output
+exec > >(tee -a "$LOG_FILE")
 exec 2>&1
 
 echo "====================================="
