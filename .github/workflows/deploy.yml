@@ -110,12 +110,33 @@ jobs:
           else
             echo "VM already running"
           fi
+          echo "Waiting for VM to reach 'VM running' state..."
 
-          echo "Waiting for VM to be fully running..."
-          az vm wait -g "$RG" -n "$VM" --running
+          for i in {1..30}; do
+            STATE=$(az vm get-instance-view \
+              -g "$RG" \
+              -n "$VM" \
+              --query "instanceView.statuses[?starts_with(code,'PowerState/')].displayStatus" \
+              -o tsv)
+
+            echo "Current state: $STATE"
+
+            if [[ "$STATE" == "VM running" ]]; then
+              echo "VM is running"
+              break
+            fi
+
+            sleep 10
+          done
+
+          if [[ "$STATE" != "VM running" ]]; then
+            echo "ERROR: VM did not reach running state in time"
+            exit 1
+          fi
 
           echo "Waiting for Azure agent readiness..."
           sleep 30
+
 
       # --------------------------------------------------
       # Azure Run Command (authoritative execution)
