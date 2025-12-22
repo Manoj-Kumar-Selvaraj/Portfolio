@@ -135,7 +135,7 @@ jobs:
           fi
 
           echo "Waiting for Azure agent readiness..."
-          sleep 30
+          sleep 5
 
 
       # --------------------------------------------------
@@ -176,12 +176,11 @@ jobs:
                   RESOURCE_GROUP=portfolio-rg
                   INSTALL_DIR=/opt/jenkins-install
                   LOG_FILE=\"/var/log/jenkins-install.log\"
-                  if [[ -z \"$LOG_FILE\" ]]; then
-                    LOG_FILE=\"/tmp/jenkins-install.log\"
-                  fi
-                  mkdir -p \"\$(dirname \\\"$LOG_FILE\\\")\"
-                  touch \"$LOG_FILE\"
-                  exec >>\"$LOG_FILE\" 2>&1
+                  # Use absolute path for log file to avoid variable interpolation issues
+                  mkdir -p /var/log
+                  touch /var/log/jenkins-install.log
+                  LOG_FILE="/var/log/jenkins-install.log"
+                  exec >>"$LOG_FILE" 2>&1
 
                   echo \"=====================================\"
                   echo \"Jenkins install started at $(date -u)\"
