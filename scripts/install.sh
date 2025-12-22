@@ -1,11 +1,17 @@
-# Optionally set up Jenkins agent as a service if flag is set
-./scripts/setup-jenkins-agent-service.sh
+
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-
 LOG_FILE="/var/log/jenkins-install.log"
+if [[ -z "$LOG_FILE" ]]; then
+  LOG_FILE="/tmp/jenkins-install.log"
+fi
+mkdir -p "$(dirname "$LOG_FILE")"
+touch "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
+
+# Optionally set up Jenkins agent as a service if flag is set
+./scripts/setup-jenkins-agent-service.sh
 
 # Ensure SSH is running
 ./scripts/ensure-ssh.sh
