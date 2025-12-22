@@ -48,10 +48,7 @@ jobs:
             case "${1,,}" in true|1|yes) echo 1 ;; *) echo 0 ;; esac
           }
 
-          FORCE=0
-          FORCE_NGINX=0
-          FORCE_CONTROLLER=0
-          FORCE_AGENT=0
+          FORCE=0 FORCE_NGINX=0 FORCE_CONTROLLER=0 FORCE_AGENT=0
 
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
@@ -88,6 +85,39 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       # --------------------------------------------------
+      # Ensure VM is running
+      # --------------------------------------------------
+      - name: Ensure Jenkins VM is running
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RG="portfolio-rg"
+          VM="jenkins-vm"
+
+          echo "Checking VM power state..."
+          STATE=$(az vm get-instance-view \
+            -g "$RG" \
+            -n "$VM" \
+            --query "instanceView.statuses[?starts_with(code,'PowerState/')].displayStatus" \
+            -o tsv)
+
+          echo "Current state: $STATE"
+
+          if [[ "$STATE" == "VM deallocated" || "$STATE" == "VM stopped" ]]; then
+            echo "Starting VM..."
+            az vm start -g "$RG" -n "$VM"
+          else
+            echo "VM already running"
+          fi
+
+          echo "Waiting for VM to be fully running..."
+          az vm wait -g "$RG" -n "$VM" --running
+
+          echo "Waiting for Azure agent readiness..."
+          sleep 30
+
+      # --------------------------------------------------
       # Azure Run Command (authoritative execution)
       # --------------------------------------------------
       - name: Run Jenkins install via Azure Run Command
@@ -104,51 +134,48 @@ jobs:
               FORCE_AGENT=${{ env.FORCE_AGENT }} \
               AZURE_KV_NAME=${{ secrets.AZURE_KV_NAME }} \
               KV_SECRET_NAME=${{ secrets.KV_SECRET_NAME }} \
-              --scripts '
-                bash -c "
-                  set -Eeuo pipefail
+            --scripts '
+              #!/usr/bin/env bash
+              set -Eeuo pipefail
 
-                  VM_NAME=jenkins-vm
-                  RESOURCE_GROUP=portfolio-rg
-                  INSTALL_DIR=/opt/jenkins-install
-                  LOG_FILE=/var/log/jenkins-install.log
+              VM_NAME="jenkins-vm"
+              RESOURCE_GROUP="portfolio-rg"
+              INSTALL_DIR="/opt/jenkins-install"
+              LOG_FILE="/var/log/jenkins-install.log"
 
-                  mkdir -p /var/log
-                  touch \"\$LOG_FILE\"
-                  exec >>\"\$LOG_FILE\" 2>&1
+              mkdir -p /var/log
+              exec >>"$LOG_FILE" 2>&1
 
-                  echo \"=====================================\"
-                  echo \"Jenkins install started at \$(date -u)\"
-                  echo \"VM=\$VM_NAME RG=\$RESOURCE_GROUP\"
-                  echo \"FORCE=\$FORCE\"
-                  echo \"FORCE_NGINX=\$FORCE_NGINX\"
-                  echo \"FORCE_CONTROLLER=\$FORCE_CONTROLLER\"
-                  echo \"FORCE_AGENT=\$FORCE_AGENT\"
-                  echo \"=====================================\"
+              echo "====================================="
+              echo "Jenkins install started at $(date -u)"
+              echo "VM=$VM_NAME RG=$RESOURCE_GROUP"
+              echo "FORCE=$FORCE"
+              echo "FORCE_NGINX=$FORCE_NGINX"
+              echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
+              echo "FORCE_AGENT=$FORCE_AGENT"
+              echo "====================================="
 
-                  if [[ -z \"\$AZURE_KV_NAME\" || -z \"\$KV_SECRET_NAME\" ]]; then
-                    echo \"ERROR: Azure Key Vault variables missing\"
-                    exit 1
-                  fi
+              if [[ -z "$AZURE_KV_NAME" || -z "$KV_SECRET_NAME" ]]; then
+                echo "ERROR: Azure Key Vault variables missing"
+                exit 1
+              fi
 
-                  rm -rf \"\$INSTALL_DIR\"
-                  git clone -b Azure-Scripts \
-                    https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
-                    \"\$INSTALL_DIR\"
+              rm -rf "$INSTALL_DIR"
+              git clone -b Azure-Scripts \
+                https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \
+                "$INSTALL_DIR"
 
-                  cd \"\$INSTALL_DIR\"
-                  chmod -R +x scripts
+              cd "$INSTALL_DIR"
+              chmod -R +x scripts
 
-                  env \
-                    FORCE=\"\$FORCE\" \
-                    FORCE_NGINX=\"\$FORCE_NGINX\" \
-                    FORCE_CONTROLLER=\"\$FORCE_CONTROLLER\" \
-                    FORCE_AGENT=\"\$FORCE_AGENT\" \
-                    AZURE_KV_NAME=\"\$AZURE_KV_NAME\" \
-                    KV_SECRET_NAME=\"\$KV_SECRET_NAME\" \
-                    bash scripts/install.sh
+              env \
+                FORCE="$FORCE" \
+                FORCE_NGINX="$FORCE_NGINX" \
+                FORCE_CONTROLLER="$FORCE_CONTROLLER" \
+                FORCE_AGENT="$FORCE_AGENT" \
+                AZURE_KV_NAME="$AZURE_KV_NAME" \
+                KV_SECRET_NAME="$KV_SECRET_NAME" \
+                bash scripts/install.sh
 
-                  echo \"Jenkins install completed at \$(date -u)\"
-                "
-              '
-
+              echo "Jenkins install completed at $(date -u)"
+            '
