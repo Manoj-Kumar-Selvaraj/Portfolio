@@ -3,14 +3,20 @@ set -Eeuo pipefail
 
 # Ensure SSH service is running and enabled
 if systemctl list-unit-files | grep -q '^ssh\.service'; then
-  sudo systemctl start ssh
-  sudo systemctl enable ssh
-  sudo systemctl status ssh
+  echo "Found ssh.service, starting and enabling..."
+  sudo systemctl start ssh || true
+  sudo systemctl enable ssh || true
+  sudo systemctl status ssh --no-pager || true
 elif systemctl list-unit-files | grep -q '^sshd\.service'; then
-  sudo systemctl start sshd
-  sudo systemctl enable sshd
-  sudo systemctl status sshd
+  echo "Found sshd.service, starting and enabling..."
+  sudo systemctl start sshd || true
+  sudo systemctl enable sshd || true
+  sudo systemctl status sshd --no-pager || true
 else
-  echo "No SSH service found."
-  exit 1
+  echo "No SSH service found, installing openssh-server..."
+  sudo apt-get update -y
+  sudo apt-get install -y openssh-server
+  sudo systemctl start ssh || sudo systemctl start sshd
+  sudo systemctl enable ssh || sudo systemctl enable sshd
+  echo "SSH service installed and started."
 fi
