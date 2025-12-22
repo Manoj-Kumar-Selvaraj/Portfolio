@@ -169,10 +169,9 @@ jobs:
               JENKINS_AGENT_SECRET=$JENKINS_AGENT_SECRET \
               JENKINS_AGENT_NAME=$JENKINS_AGENT_NAME \
             --scripts 'bash -lc "
-              INSTALL_DIR=/opt/jenkins-install
-              rm -rf \"$INSTALL_DIR\"
-              git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git \"$INSTALL_DIR\"
-              cd \"$INSTALL_DIR\"
+              rm -rf /opt/jenkins-install
+              git clone -b Azure-Scripts https://github.com/Manoj-Kumar-Selvaraj/Portfolio.git /opt/jenkins-install
+              cd /opt/jenkins-install
               chmod -R +x scripts
               bash scripts/remote-install.sh
             "'
