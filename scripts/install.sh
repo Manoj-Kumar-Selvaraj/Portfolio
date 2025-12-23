@@ -6,6 +6,18 @@ set -Eeuo pipefail
 echo "Stopping idle-shutdown service during deployment..."
 sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
 
+# Fix corrupted postfix installation once at the start
+echo "Cleaning up any corrupted postfix installation..."
+export DEBIAN_FRONTEND=noninteractive
+sudo systemctl stop postfix 2>/dev/null || true
+sudo apt-get remove --purge -y postfix 2>/dev/null || true
+sudo rm -rf /var/lib/dpkg/info/postfix.* 2>/dev/null || true
+sudo rm -rf /etc/postfix 2>/dev/null || true
+sudo dpkg --configure -a 2>/dev/null || true
+sudo apt-get autoremove -y 2>/dev/null || true
+sudo apt-get clean 2>/dev/null || true
+echo "Postfix cleanup complete."
+
 LOG_FILE="/var/log/jenkins-install.log"
 if [[ -z "$LOG_FILE" ]]; then
   LOG_FILE="/tmp/jenkins-install.log"
