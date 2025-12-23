@@ -14,6 +14,8 @@ elif systemctl list-unit-files | grep -q '^sshd\.service'; then
   sudo systemctl status sshd --no-pager || true
 else
   echo "No SSH service found, installing openssh-server..."
+  # Fix any interrupted dpkg operations first
+  sudo dpkg --configure -a || true
   sudo apt-get update -y
   sudo apt-get install -y openssh-server
   sudo systemctl start ssh || sudo systemctl start sshd
