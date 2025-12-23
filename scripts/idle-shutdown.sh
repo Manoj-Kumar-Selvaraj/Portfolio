@@ -15,7 +15,7 @@ log() {
 # Configuration
 # ----------------------------
 JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
-IDLE_MINUTES="${IDLE_MINUTES:-3}"
+IDLE_MINUTES="${IDLE_MINUTES:-5}"
 CHECK_INTERVAL=15
 
 ACCESS_LOG="${ACCESS_LOG:-/var/log/nginx/jenkins.access.log}"
@@ -81,6 +81,9 @@ wait_for_jenkins
 log "Jenkins is reachable"
 
 start_ms="$(now_ms)"
+# Grace period: Wait at least 10 minutes after service start before allowing shutdown
+GRACE_PERIOD_MS=$((10 * 60 * 1000))
+log "Grace period: 10 minutes from service start"
 
 while true; do
   [[ "$graceful_shutdown" -eq 1 ]] && break
@@ -96,7 +99,11 @@ while true; do
     log "Idle since last portal access: $((idle / 1000))s"
   fi
 
-  if [[ "$idle" -ge "$IDLE_MS" && ! -f "$DEALLOCATED_FLAG" ]]; then
+  # Check grace period first
+  time_since_start=$((now - start_ms))
+  if [[ "$time_since_start" -lt "$GRACE_PERIOD_MS" ]]; then
+    log "Still in grace period: $((time_since_start / 1000))s elapsed, $((GRACE_PERIOD_MS / 1000))s required"
+  elif [[ "$idle" -ge "$IDLE_MS" && ! -f "$DEALLOCATED_FLAG" ]]; then
     log "Idle threshold reached → deallocating VM ${VM_NAME}"
 
     az login --identity >/dev/null 2>&1 || true
