@@ -18,6 +18,7 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 ./scripts/setup-jenkins-agent-service.sh
 
 
+
 echo "[FORCE FLAGS]"
 echo "FORCE=$FORCE"
 echo "FORCE_NGINX=$FORCE_NGINX"
