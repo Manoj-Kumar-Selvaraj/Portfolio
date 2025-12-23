@@ -6,7 +6,9 @@ EMAIL="ss.mano1998@gmail.com"
 
 if ! command -v mail >/dev/null 2>&1; then
   echo "mail command not found; attempting to install mailutils..."
-  sudo apt-get update -y && sudo apt-get install -y mailutils
+  echo "postfix postfix/main_mailer_type string 'No configuration'" | sudo debconf-set-selections
+  sudo DEBIAN_FRONTEND=noninteractive apt-get update -y
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y mailutils
 fi
 
 if command -v mail >/dev/null 2>&1; then
