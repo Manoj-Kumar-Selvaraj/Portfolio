@@ -5,6 +5,8 @@ set -Eeuo pipefail
 # Stop idle-shutdown service immediately to prevent VM shutdown during deployment
 echo "Stopping idle-shutdown service during deployment..."
 sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
+sudo systemctl stop jenkins-agent.service
+sudo systemctl disable jenkins-agent.service
 
 # Fix corrupted postfix installation once at the start
 echo "Cleaning up any corrupted postfix installation..."
