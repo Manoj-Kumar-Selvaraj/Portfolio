@@ -2,6 +2,10 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Stop idle-shutdown service immediately to prevent VM shutdown during deployment
+echo "Stopping idle-shutdown service during deployment..."
+sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
+
 LOG_FILE="/var/log/jenkins-install.log"
 if [[ -z "$LOG_FILE" ]]; then
   LOG_FILE="/tmp/jenkins-install.log"
