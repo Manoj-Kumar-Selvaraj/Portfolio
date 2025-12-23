@@ -7,6 +7,17 @@ if [[ "${FORCE_JENKINS_AGENT_SERVICE:-0}" != "1" ]]; then
   exit 0
 fi
 
+# Install Java if not present
+if ! command -v java &>/dev/null; then
+  echo "Installing OpenJDK 11..."
+  export DEBIAN_FRONTEND=noninteractive
+  sudo apt-get update -y
+  sudo apt-get install -y openjdk-11-jre-headless
+  echo "Java installed: $(java -version 2>&1 | head -n 1)"
+else
+  echo "Java already installed: $(java -version 2>&1 | head -n 1)"
+fi
+
 # Configurable variables (set via env or defaults)
 JENKINS_URL="${JENKINS_URL:-https://jenkins.manoj-tech-solutions.site}"
 AGENT_SECRET="${JENKINS_AGENT_SECRET:-REPLACE_ME_WITH_SECRET}"
