@@ -3,9 +3,32 @@ set -Eeuo pipefail
 
 echo "Installing Jenkins idle shutdown service..."
 
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_IDLE_SHUTDOWN takes precedence; otherwise fall back to FORCE
+RAW_FORCE_IDLE_SHUTDOWN="${FORCE_IDLE_SHUTDOWN:-}"
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_IDLE_SHUTDOWN" ]; then
+  RAW_FORCE_IDLE_SHUTDOWN="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_IDLE_SHUTDOWN")" in
+  1|true|yes) FORCE_IDLE_SHUTDOWN=1 ;;
+  *) FORCE_IDLE_SHUTDOWN=0 ;;
+esac
+export FORCE_IDLE_SHUTDOWN
+
 SERVICE_NAME="jenkins-idle-shutdown.service"
 SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
 WATCHER_SCRIPT="/opt/jenkins-install/scripts/idle-shutdown.sh"
+
+# Check if service already exists and is active
+if systemctl is-active --quiet "${SERVICE_NAME}" && [ "${FORCE_IDLE_SHUTDOWN:-0}" -eq 0 ]; then
+  echo "Idle shutdown service already running. Skipping setup (use FORCE_IDLE_SHUTDOWN=1 to reinstall)."
+  exit 0
+fi
+
+if [ "${FORCE_IDLE_SHUTDOWN:-0}" -eq 1 ]; then
+  echo "FORCE_IDLE_SHUTDOWN set; forcing idle-shutdown service reinstallation"
+fi
 
 # -------- CONFIGURE HERE --------
 VM_RG="portfolio-rg"

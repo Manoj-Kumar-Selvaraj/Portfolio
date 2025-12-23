@@ -15,8 +15,17 @@ on:
       force_controller:
         description: "Force controller"
         default: "false"
-      force_agent:
-        description: "Force agent"
+      force_agent_env:
+        description: "Force agent environment"
+        default: "false"
+      force_agent_service:
+        description: "Force agent service"
+        default: "false"
+      force_idle_shutdown:
+        description: "Force idle-shutdown"
+        default: "false"
+      force_az_cli:
+        description: "Force az-cli"
         default: "false"
 
 permissions:
@@ -48,35 +57,46 @@ jobs:
             case "${1,,}" in true|1|yes) echo 1 ;; *) echo 0 ;; esac
           }
 
-          FORCE=0 FORCE_NGINX=0 FORCE_CONTROLLER=0 FORCE_AGENT=0
+          FORCE=0 FORCE_NGINX=0 FORCE_CONTROLLER=0 FORCE_AGENT_ENV=0 FORCE_AGENT_SERVICE=0 FORCE_IDLE_SHUTDOWN=0 FORCE_AZ_CLI=0
 
           if [[ "$GITHUB_EVENT_NAME" == "push" ]]; then
             msg="$(git log -1 --pretty=%B | tr '[:upper:]' '[:lower:]')"
             [[ "$msg" =~ \[force\] ]] && FORCE=1
             [[ "$msg" =~ \[force-nginx\] ]] && FORCE_NGINX=1
             [[ "$msg" =~ \[force-controller\] ]] && FORCE_CONTROLLER=1
-            [[ "$msg" =~ \[force-agent\] ]] && FORCE_AGENT=1
+            [[ "$msg" =~ \[force-agent-env\] ]] && FORCE_AGENT_ENV=1
+            [[ "$msg" =~ \[force-agent-service\] ]] && FORCE_AGENT_SERVICE=1
+            [[ "$msg" =~ \[force-idle-shutdown\] ]] && FORCE_IDLE_SHUTDOWN=1
+            [[ "$msg" =~ \[force-az-cli\] ]] && FORCE_AZ_CLI=1
           else
             FORCE="$(normalize "${{ github.event.inputs.force }}")"
             FORCE_NGINX="$(normalize "${{ github.event.inputs.force_nginx }}")"
             FORCE_CONTROLLER="$(normalize "${{ github.event.inputs.force_controller }}")"
-            FORCE_AGENT="$(normalize "${{ github.event.inputs.force_agent }}")"
+            FORCE_AGENT_ENV="$(normalize "${{ github.event.inputs.force_agent_env }}")"
+            FORCE_AGENT_SERVICE="$(normalize "${{ github.event.inputs.force_agent_service }}")"
+            FORCE_IDLE_SHUTDOWN="$(normalize "${{ github.event.inputs.force_idle_shutdown }}")"
+            FORCE_AZ_CLI="$(normalize "${{ github.event.inputs.force_az_cli }}")"
           fi
 
           [[ "$FORCE_NGINX" -eq 0 ]] && FORCE_NGINX="$FORCE"
           [[ "$FORCE_CONTROLLER" -eq 0 ]] && FORCE_CONTROLLER="$FORCE"
-          [[ "$FORCE_AGENT" -eq 0 ]] && FORCE_AGENT="$FORCE"
+          [[ "$FORCE_AGENT_ENV" -eq 0 ]] && FORCE_AGENT_ENV="$FORCE"
+          [[ "$FORCE_AGENT_SERVICE" -eq 0 ]] && FORCE_AGENT_SERVICE="$FORCE"
+          [[ "$FORCE_IDLE_SHUTDOWN" -eq 0 ]] && FORCE_IDLE_SHUTDOWN="$FORCE"
+          [[ "$FORCE_AZ_CLI" -eq 0 ]] && FORCE_AZ_CLI="$FORCE"
 
           {
             echo "FORCE=$FORCE"
             echo "FORCE_NGINX=$FORCE_NGINX"
             echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
-            echo "FORCE_AGENT=$FORCE_AGENT"
-            # Map FORCE_AGENT to agent service setup flag expected by setup-jenkins-agent-service.sh
-            echo "FORCE_JENKINS_AGENT_SERVICE=$FORCE_AGENT"
+            echo "FORCE_AGENT_ENV=$FORCE_AGENT_ENV"
+            echo "FORCE_AGENT_SERVICE=$FORCE_AGENT_SERVICE"
+            echo "FORCE_IDLE_SHUTDOWN=$FORCE_IDLE_SHUTDOWN"
+            echo "FORCE_AZ_CLI=$FORCE_AZ_CLI"
             # Provide a default agent name if not already set upstream
             echo "JENKINS_AGENT_NAME=${JENKINS_AGENT_NAME:-Linux-01}"
           } >> "$GITHUB_ENV"
+
 
       # --------------------------------------------------
       # Azure Login (OIDC – no secrets)
@@ -151,10 +171,12 @@ jobs:
           FORCE: ${{ env.FORCE }}
           FORCE_NGINX: ${{ env.FORCE_NGINX }}
           FORCE_CONTROLLER: ${{ env.FORCE_CONTROLLER }}
-          FORCE_AGENT: ${{ env.FORCE_AGENT }}
+          FORCE_AGENT_ENV: ${{ env.FORCE_AGENT_ENV }}
+          FORCE_AGENT_SERVICE: ${{ env.FORCE_AGENT_SERVICE }}
+          FORCE_IDLE_SHUTDOWN: ${{ env.FORCE_IDLE_SHUTDOWN }}
+          FORCE_AZ_CLI: ${{ env.FORCE_AZ_CLI }}
           AZURE_KV_NAME: ${{ secrets.AZURE_KV_NAME }}
           KV_SECRET_NAME: ${{ secrets.KV_SECRET_NAME }}
-          FORCE_JENKINS_AGENT_SERVICE: ${{ env.FORCE_JENKINS_AGENT_SERVICE }}
           JENKINS_AGENT_SECRET: ${{ secrets.JENKINS_AGENT_SECRET }}
           JENKINS_AGENT_NAME: ${{ env.JENKINS_AGENT_NAME }}
         run: |
@@ -166,10 +188,12 @@ jobs:
               FORCE=$FORCE \
               FORCE_NGINX=$FORCE_NGINX \
               FORCE_CONTROLLER=$FORCE_CONTROLLER \
-              FORCE_AGENT=$FORCE_AGENT \
+              FORCE_AGENT_ENV=$FORCE_AGENT_ENV \
+              FORCE_AGENT_SERVICE=$FORCE_AGENT_SERVICE \
+              FORCE_IDLE_SHUTDOWN=$FORCE_IDLE_SHUTDOWN \
+              FORCE_AZ_CLI=$FORCE_AZ_CLI \
               AZURE_KV_NAME=$AZURE_KV_NAME \
               KV_SECRET_NAME=$KV_SECRET_NAME \
-              FORCE_JENKINS_AGENT_SERVICE=$FORCE_JENKINS_AGENT_SERVICE \
               JENKINS_AGENT_SECRET=$JENKINS_AGENT_SECRET \
               JENKINS_AGENT_NAME=$JENKINS_AGENT_NAME \
             --scripts 'bash -lc "

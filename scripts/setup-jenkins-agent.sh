@@ -14,6 +14,29 @@ echo "========================================"
 echo " Jenkins Agent + Harbor Environment Setup"
 echo "========================================"
 
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_AGENT_ENV takes precedence; otherwise fall back to FORCE
+RAW_FORCE_AGENT_ENV="${FORCE_AGENT_ENV:-}"
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_AGENT_ENV" ]; then
+  RAW_FORCE_AGENT_ENV="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_AGENT_ENV")" in
+  1|true|yes) FORCE_AGENT_ENV=1 ;;
+  *) FORCE_AGENT_ENV=0 ;;
+esac
+export FORCE_AGENT_ENV
+
+# Check if agent environment is already set up (Docker, Python, uv, harbor installed)
+if command -v docker &>/dev/null && command -v python3.13 &>/dev/null && command -v uv &>/dev/null && command -v harbor &>/dev/null && [ "${FORCE_AGENT_ENV:-0}" -eq 0 ]; then
+  echo "Jenkins agent environment already set up. Skipping (use FORCE_AGENT_ENV=1 to reinstall)."
+  exit 0
+fi
+
+if [ "${FORCE_AGENT_ENV:-0}" -eq 1 ]; then
+  echo "FORCE_AGENT_ENV set; forcing agent environment reinstallation"
+fi
+
 # -------------------------
 # 0. Wait for OS readiness
 # -------------------------
@@ -60,19 +83,6 @@ fi
 
 sudo systemctl enable docker
 sudo systemctl start docker
-
-# Normalize per-component FORCE environment variables (accept true/1/yes)
-# FORCE_AGENT takes precedence; otherwise fall back to FORCE
-RAW_FORCE_AGENT="${FORCE_AGENT:-}"
-RAW_FORCE_GLOBAL="${FORCE:-0}"
-if [ -z "$RAW_FORCE_AGENT" ]; then
-  RAW_FORCE_AGENT="$RAW_FORCE_GLOBAL"
-fi
-case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_AGENT")" in
-  1|true|yes) FORCE_AGENT=1 ;;
-  *) FORCE_AGENT=0 ;;
-esac
-export FORCE_AGENT
 
 # -------------------------
 # 3. Allow Jenkins user to run Docker

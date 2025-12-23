@@ -2,11 +2,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Stop idle-shutdown service immediately to prevent VM shutdown during deployment
-echo "Stopping idle-shutdown service during deployment..."
-sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
-sudo systemctl stop jenkins-agent.service
-sudo systemctl disable jenkins-agent.service
+# # Stop idle-shutdown service immediately to prevent VM shutdown during deployment
+# echo "Stopping idle-shutdown service during deployment..."
+# sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
+# sudo systemctl stop jenkins-agent.service
+# sudo systemctl disable jenkins-agent.service
 
 # Fix corrupted postfix installation once at the start
 echo "Cleaning up any corrupted postfix installation..."
@@ -32,7 +32,10 @@ echo "[FORCE FLAGS]"
 echo "FORCE=$FORCE"
 echo "FORCE_NGINX=$FORCE_NGINX"
 echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
-echo "FORCE_AGENT=$FORCE_AGENT"
+echo "FORCE_AGENT_ENV=$FORCE_AGENT_ENV"
+echo "FORCE_AGENT_SERVICE=$FORCE_AGENT_SERVICE"
+echo "FORCE_IDLE_SHUTDOWN=$FORCE_IDLE_SHUTDOWN"
+echo "FORCE_AZ_CLI=$FORCE_AZ_CLI"
 echo "===================="
 
 ./scripts/setup-jenkins-agent.sh

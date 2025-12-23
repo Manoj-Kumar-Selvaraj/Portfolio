@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
-# Only run if FORCE_JENKINS_AGENT_SERVICE is set to 1
-if [[ "${FORCE_JENKINS_AGENT_SERVICE:-0}" != "1" ]]; then
-  echo "FORCE_JENKINS_AGENT_SERVICE not set; skipping Jenkins agent service setup."
+# Only run if FORCE_AGENT_SERVICE is set to 1
+if [[ "${FORCE_AGENT_SERVICE:-0}" != "1" ]]; then
+  echo "FORCE_AGENT_SERVICE not set; skipping Jenkins agent service setup."
   exit 0
 fi
 

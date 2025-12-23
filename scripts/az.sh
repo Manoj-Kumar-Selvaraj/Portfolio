@@ -8,6 +8,29 @@ sudo dpkg --configure -a || true
 
 echo "Installing Azure CLI..."
 
+# Normalize per-component FORCE environment variables (accept true/1/yes)
+# FORCE_AZ_CLI takes precedence; otherwise fall back to FORCE
+RAW_FORCE_AZ_CLI="${FORCE_AZ_CLI:-}"
+RAW_FORCE_GLOBAL="${FORCE:-0}"
+if [ -z "$RAW_FORCE_AZ_CLI" ]; then
+  RAW_FORCE_AZ_CLI="$RAW_FORCE_GLOBAL"
+fi
+case "$(tr '[:upper:]' '[:lower:]' <<<"$RAW_FORCE_AZ_CLI")" in
+  1|true|yes) FORCE_AZ_CLI=1 ;;
+  *) FORCE_AZ_CLI=0 ;;
+esac
+export FORCE_AZ_CLI
+
+# Check if Azure CLI is already installed
+if command -v az &>/dev/null && [ "${FORCE_AZ_CLI:-0}" -eq 0 ]; then
+  echo "Azure CLI already installed: $(az version --output tsv | grep azure-cli | awk '{print $2}'). Skipping (use FORCE_AZ_CLI=1 to reinstall)."
+  exit 0
+fi
+
+if [ "${FORCE_AZ_CLI:-0}" -eq 1 ]; then
+  echo "FORCE_AZ_CLI set; forcing Azure CLI reinstallation"
+fi
+
 sudo apt-get update
 sudo apt-get install -y ca-certificates curl apt-transport-https lsb-release gnupg
 sudo mkdir -p /etc/apt/keyrings
