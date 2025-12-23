@@ -9,10 +9,10 @@ fi
 
 # Install Java if not present
 if ! command -v java &>/dev/null; then
-  echo "Installing OpenJDK 11..."
+  echo "Installing OpenJDK 17..."
   export DEBIAN_FRONTEND=noninteractive
   sudo apt-get update -y
-  sudo apt-get install -y openjdk-11-jre-headless
+  sudo apt-get install -y openjdk-17-jre-headless
   echo "Java installed: $(java -version 2>&1 | head -n 1)"
 else
   echo "Java already installed: $(java -version 2>&1 | head -n 1)"
@@ -23,7 +23,7 @@ JENKINS_URL="${JENKINS_URL:-https://jenkins.manoj-tech-solutions.site}"
 AGENT_SECRET="${JENKINS_AGENT_SECRET:-REPLACE_ME_WITH_SECRET}"
 AGENT_NAME="${JENKINS_AGENT_NAME:-Linux-01}"
 WORK_DIR="${JENKINS_AGENT_WORKDIR:-/var/jenkins}"
-JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-11-openjdk-amd64}"
+JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
 AGENT_JAR="${AGENT_JAR:-$WORK_DIR/agent.jar}"
 USER="${JENKINS_AGENT_USER:-azureuser}"
 GROUP="${JENKINS_AGENT_GROUP:-azureuser}"
