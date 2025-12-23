@@ -7,23 +7,25 @@ if [[ "${FORCE_JENKINS_AGENT_SERVICE:-0}" != "1" ]]; then
   exit 0
 fi
 
-# Install Java if not present
-if ! command -v java &>/dev/null; then
-  echo "Installing OpenJDK 17..."
-  export DEBIAN_FRONTEND=noninteractive
-  sudo apt-get update -y
-  sudo apt-get install -y openjdk-17-jre-headless
-  echo "Java installed: $(java -version 2>&1 | head -n 1)"
-else
-  echo "Java already installed: $(java -version 2>&1 | head -n 1)"
-fi
+# Install Java 17 and ensure it's the default
+echo "Ensuring Java 17 is installed and set as default..."
+export DEBIAN_FRONTEND=noninteractive
+sudo apt-get update -y
+sudo apt-get install -y openjdk-17-jre-headless
+
+# Set Java 17 as the system default
+sudo update-alternatives --set java /usr/lib/jvm/java-17-openjdk-amd64/bin/java || true
+
+# Verify Java version
+echo "Active Java version: $(java -version 2>&1 | head -n 1)"
 
 # Configurable variables (set via env or defaults)
 JENKINS_URL="${JENKINS_URL:-https://jenkins.manoj-tech-solutions.site}"
 AGENT_SECRET="${JENKINS_AGENT_SECRET:-REPLACE_ME_WITH_SECRET}"
 AGENT_NAME="${JENKINS_AGENT_NAME:-Linux-01}"
 WORK_DIR="${JENKINS_AGENT_WORKDIR:-/var/jenkins}"
-JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-17-openjdk-amd64}"
+JAVA_17_PATH="/usr/lib/jvm/java-17-openjdk-amd64/bin/java"
+JAVA_HOME="/usr/lib/jvm/java-17-openjdk-amd64"
 AGENT_JAR="${AGENT_JAR:-$WORK_DIR/agent.jar}"
 USER="${JENKINS_AGENT_USER:-azureuser}"
 GROUP="${JENKINS_AGENT_GROUP:-azureuser}"
@@ -49,7 +51,7 @@ User=$USER
 Group=$GROUP
 WorkingDirectory=$WORK_DIR
 
-ExecStart=/usr/bin/java -jar $AGENT_JAR \
+ExecStart=$JAVA_17_PATH -jar $AGENT_JAR \
   -url $JENKINS_URL \
   -secret $AGENT_SECRET \
   -name $AGENT_NAME \
