@@ -72,6 +72,10 @@ jobs:
             echo "FORCE_NGINX=$FORCE_NGINX"
             echo "FORCE_CONTROLLER=$FORCE_CONTROLLER"
             echo "FORCE_AGENT=$FORCE_AGENT"
+            # Map FORCE_AGENT to agent service setup flag expected by setup-jenkins-agent-service.sh
+            echo "FORCE_JENKINS_AGENT_SERVICE=$FORCE_AGENT"
+            # Provide a default agent name if not already set upstream
+            echo "JENKINS_AGENT_NAME=${JENKINS_AGENT_NAME:-Linux-01}"
           } >> "$GITHUB_ENV"
 
       # --------------------------------------------------
