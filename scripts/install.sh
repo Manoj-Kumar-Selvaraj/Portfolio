@@ -17,8 +17,6 @@ exec > >(tee -a "$LOG_FILE") 2>&1
 # Optionally set up Jenkins agent as a service if flag is set
 ./scripts/setup-jenkins-agent-service.sh
 
-# Ensure SSH is running
-./scripts/ensure-ssh.sh
 
 echo "[FORCE FLAGS]"
 echo "FORCE=$FORCE"
@@ -41,6 +39,3 @@ else
   echo "Jenkins credentials not ready. Skipping trigger."
 fi
 echo "Jenkins installation and setup completed."
-
-# Email the install log
-./scripts/email-log.sh
