@@ -26,11 +26,6 @@ mkdir -p "$(dirname "$LOG_FILE")"
 touch "$LOG_FILE"
 exec > >(tee -a "$LOG_FILE") 2>&1
 
-# Optionally set up Jenkins agent as a service if flag is set
-./scripts/setup-jenkins-agent-service.sh
-
-
-
 echo "[FORCE FLAGS]"
 echo "FORCE=$FORCE"
 echo "FORCE_NGINX=$FORCE_NGINX"
@@ -41,6 +36,9 @@ echo "===================="
 ./scripts/setup-jenkins-agent.sh
 ./scripts/setup-jenkins-controller.sh
 ./scripts/setup-nginx-jenkins.sh
+
+# Set up Jenkins agent as a service AFTER Java is installed
+./scripts/setup-jenkins-agent-service.sh
 
 ./scripts/install-idle-shutdown-service.sh
 ./scripts/az.sh
