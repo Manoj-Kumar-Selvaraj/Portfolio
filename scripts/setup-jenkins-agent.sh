@@ -3,6 +3,12 @@ set -Eeuo pipefail
 # Ensure HOME is set (Azure Run Command / sudo safety)
 export HOME="${HOME:-/root}"
 
+# Force non-interactive apt and pre-configure postfix to avoid prompts
+export DEBIAN_FRONTEND=noninteractive
+echo 'postfix postfix/main_mailer_type select No configuration' | sudo debconf-set-selections
+# Fix any interrupted dpkg operations
+sudo dpkg --configure -a || true
+
 
 echo "========================================"
 echo " Jenkins Agent + Harbor Environment Setup"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Force non-interactive apt and pre-configure postfix to avoid prompts
+export DEBIAN_FRONTEND=noninteractive
+echo 'postfix postfix/main_mailer_type select No configuration' | sudo debconf-set-selections
+sudo dpkg --configure -a || true
+
 echo "Installing Azure CLI..."
 
 sudo apt-get update
