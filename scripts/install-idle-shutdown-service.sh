@@ -33,8 +33,8 @@ fi
 # -------- CONFIGURE HERE --------
 VM_RG="portfolio-rg"
 VM_NAME="jenkins-vm"
-# Default is 3 minutes to match watcher (portal-access-only policy)
-IDLE_MINUTES="3"
+# Default is 30 minutes idle threshold
+IDLE_MINUTES="30"
 # Optional: path to access log (default to dedicated Jenkins nginx access log)
 ACCESS_LOG="/var/log/nginx/jenkins.access.log"
 # --------------------------------
