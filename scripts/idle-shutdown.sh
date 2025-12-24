@@ -123,5 +123,6 @@ while true; do
   fi
 
   sleep "$CHECK_INTERVAL"
+done
 
 log "Idle shutdown watcher exiting"
