@@ -57,12 +57,21 @@ get_last_access_ms() {
   [[ -f "$ACCESS_LOG" ]] || { echo 0; return; }
 
   awk '
+    BEGIN {
+      # Month name to number mapping
+      month["Jan"]=1; month["Feb"]=2; month["Mar"]=3; month["Apr"]=4
+      month["May"]=5; month["Jun"]=6; month["Jul"]=7; month["Aug"]=8
+      month["Sep"]=9; month["Oct"]=10; month["Nov"]=11; month["Dec"]=12
+    }
     match($0, /\[([0-9]{2})\/([A-Za-z]{3})\/([0-9]{4}):([0-9]{2}:[0-9]{2}:[0-9]{2})/, a) {
-      # Convert nginx time → ISO 8601
-      cmd = "date -u -d \"" a[3] "-" a[2] "-" a[1] " " a[4] "\" +%s"
-      cmd | getline t
-      close(cmd)
-      if (t > max) max = t
+      # Convert nginx time to epoch using numeric month
+      m = month[a[2]]
+      if (m > 0) {
+        cmd = "date -u -d \"" a[3] "-" sprintf("%02d", m) "-" a[1] " " a[4] "\" +%s"
+        cmd | getline t
+        close(cmd)
+        if (t > max) max = t
+      }
     }
     END {
       if (max > 0) print max * 1000
