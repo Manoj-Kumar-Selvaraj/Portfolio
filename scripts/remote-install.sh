@@ -6,6 +6,17 @@ RESOURCE_GROUP=portfolio-rg
 INSTALL_DIR=/opt/jenkins-install
 LOG_FILE="/var/log/jenkins-install.log"
 
+# Default all force flags and required variables to avoid unbound variable errors
+FORCE="${FORCE:-0}"
+FORCE_NGINX="${FORCE_NGINX:-0}"
+FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
+FORCE_AGENT="${FORCE_AGENT:-0}"
+FORCE_JENKINS_AGENT_SERVICE="${FORCE_JENKINS_AGENT_SERVICE:-0}"
+JENKINS_AGENT_SECRET="${JENKINS_AGENT_SECRET:-}"
+JENKINS_AGENT_NAME="${JENKINS_AGENT_NAME:-}"
+AZURE_KV_NAME="${AZURE_KV_NAME:-}"
+KV_SECRET_NAME="${KV_SECRET_NAME:-}"
+
 mkdir -p /var/log
 if [[ -z "$LOG_FILE" ]]; then
   LOG_FILE="/tmp/jenkins-install.log"

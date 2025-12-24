@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Default all variables to avoid unbound variable errors
+FORCE_AGENT_SERVICE="${FORCE_AGENT_SERVICE:-0}"
+JENKINS_AGENT_SECRET="${JENKINS_AGENT_SECRET:-REPLACE_ME_WITH_SECRET}"
+JENKINS_AGENT_NAME="${JENKINS_AGENT_NAME:-Linux-01}"
+JENKINS_AGENT_WORKDIR="${JENKINS_AGENT_WORKDIR:-/var/jenkins}"
+JENKINS_AGENT_USER="${JENKINS_AGENT_USER:-azureuser}"
+JENKINS_AGENT_GROUP="${JENKINS_AGENT_GROUP:-azureuser}"
+
 # Only run if FORCE_AGENT_SERVICE is set to 1
-if [[ "${FORCE_AGENT_SERVICE:-0}" != "1" ]]; then
+if [[ "${FORCE_AGENT_SERVICE}" != "1" ]]; then
   echo "FORCE_AGENT_SERVICE not set; skipping Jenkins agent service setup."
   exit 0
 fi

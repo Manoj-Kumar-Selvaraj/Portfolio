@@ -2,6 +2,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+# Default all force flags to avoid unbound variable errors
+FORCE="${FORCE:-0}"
+FORCE_NGINX="${FORCE_NGINX:-0}"
+FORCE_CONTROLLER="${FORCE_CONTROLLER:-0}"
+FORCE_AGENT_ENV="${FORCE_AGENT_ENV:-0}"
+FORCE_AGENT_SERVICE="${FORCE_AGENT_SERVICE:-0}"
+FORCE_IDLE_SHUTDOWN="${FORCE_IDLE_SHUTDOWN:-0}"
+FORCE_AZ_CLI="${FORCE_AZ_CLI:-0}"
+
 # # Stop idle-shutdown service immediately to prevent VM shutdown during deployment
 # echo "Stopping idle-shutdown service during deployment..."
 # sudo systemctl stop jenkins-idle-shutdown.service 2>/dev/null || true
