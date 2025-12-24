@@ -15,7 +15,7 @@ log() {
 # Configuration
 # ----------------------------
 JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
-IDLE_MINUTES="${IDLE_MINUTES:-5}"
+IDLE_MINUTES="${IDLE_MINUTES:-30}"
 CHECK_INTERVAL=15
 
 ACCESS_LOG="${ACCESS_LOG:-/var/log/nginx/jenkins.access.log}"
