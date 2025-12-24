@@ -15,7 +15,7 @@ log() {
 # Configuration
 # ----------------------------
 JENKINS_URL="${JENKINS_URL:-http://localhost:8080}"
-IDLE_MINUTES="${IDLE_MINUTES:-5}"
+IDLE_MINUTES="${IDLE_MINUTES:-30}"
 CHECK_INTERVAL=15
 
 ACCESS_LOG="${ACCESS_LOG:-/var/log/nginx/jenkins.access.log}"
@@ -94,29 +94,33 @@ while true; do
   if [[ "$access_ms" -eq 0 ]]; then
     idle=$((now - start_ms))
     log "No portal access recorded yet; idle since start: $((idle / 1000))s"
+    # Enforce idle shutdown only if no portal access for full IDLE_MINUTES
+    if [[ "$idle" -ge "$IDLE_MS" && ! -f "$DEALLOCATED_FLAG" ]]; then
+      log "Idle threshold reached (no portal access) → deallocating VM ${VM_NAME}"
+      az login --identity >/dev/null 2>&1 || true
+      az vm deallocate \
+        --resource-group "$VM_RG" \
+        --name "$VM_NAME" \
+        --no-wait
+      touch "$DEALLOCATED_FLAG"
+      log "Deallocation triggered (one-time)"
+    fi
   else
     idle=$((now - access_ms))
     log "Idle since last portal access: $((idle / 1000))s"
-  fi
-
-  # Check grace period first
-  time_since_start=$((now - start_ms))
-  if [[ "$time_since_start" -lt "$GRACE_PERIOD_MS" ]]; then
-    log "Still in grace period: $((time_since_start / 1000))s elapsed, $((GRACE_PERIOD_MS / 1000))s required"
-  elif [[ "$idle" -ge "$IDLE_MS" && ! -f "$DEALLOCATED_FLAG" ]]; then
-    log "Idle threshold reached → deallocating VM ${VM_NAME}"
-
-    az login --identity >/dev/null 2>&1 || true
-    az vm deallocate \
-      --resource-group "$VM_RG" \
-      --name "$VM_NAME" \
-      --no-wait
-
-    touch "$DEALLOCATED_FLAG"
-    log "Deallocation triggered (one-time)"
+    # Enforce idle shutdown only if idle since last access for full IDLE_MINUTES
+    if [[ "$idle" -ge "$IDLE_MS" && ! -f "$DEALLOCATED_FLAG" ]]; then
+      log "Idle threshold reached (since last portal access) → deallocating VM ${VM_NAME}"
+      az login --identity >/dev/null 2>&1 || true
+      az vm deallocate \
+        --resource-group "$VM_RG" \
+        --name "$VM_NAME" \
+        --no-wait
+      touch "$DEALLOCATED_FLAG"
+      log "Deallocation triggered (one-time)"
+    fi
   fi
 
   sleep "$CHECK_INTERVAL"
-done
 
 log "Idle shutdown watcher exiting"
