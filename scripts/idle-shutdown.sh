@@ -4,6 +4,7 @@ set -Eeuo pipefail
 # ----------------------------
 # Locale & safety
 # ----------------------------
+
 export LC_ALL=C
 export LANG=C
 
