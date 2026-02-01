@@ -1,7 +1,9 @@
 {
   "private": true,
-  "name": "masterPortfolio",
-  "version": "0.1.0",
+  "name": "devops-portfolio",
+  "version": "1.0.0",
+  "description": "Professional DevOps Engineer Portfolio",
+  "author": "Your Name",
   "homepage": ".",
   "scripts": {
     "build": "react-scripts --openssl-legacy-provider build",
